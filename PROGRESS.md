@@ -335,3 +335,22 @@ One entry per iteration: date, item id, change, evidence, numbers.
 
 - Both normalized variants help only 1 of 5 scoring folds, so neither is adopted under the 9.3 rule. The normalized fold mean is lower (105.29 vs 107.66 Wh) and December bias falls from +161.35 to +37.37 Wh, but four folds regress; adding near-zero helps December by 2.30 Wh but does not change the 1/5 count. 9.5 therefore continues from the 9.3 winner. The scale is known at origin; days without a valid scale produce no forecast rather than a fallback.
 - Verification: `python -m pytest backend/tests -q` → **67 passed in 16.94 s** (seven new tests: trailing scale no-leak/constant/minimum observations, hand-checked near-zero fraction, target-scale arithmetic, scale multiplication and missing-scale NaN, lag-24 feature and no-leak, and forecast scale-coverage metadata). Default feature behavior and `results.json` are unchanged.
+
+## 2026-10-23 — 9.5 Frozen tuning parameters
+
+- Added `backend/scripts/frozen_tuning.py`, writing `backend/tuning_results.json`. It runs one Optuna study on each of two windows, freezes the winning hyperparameters plus the median early-stopping iteration, and applies them unchanged to all six folds with untuned `DEFAULT_PARAMS` as the comparison. Both studies use the 9.3 feature set (the tuning windows are shorter than 12 months); folds apply the 9.3 rule per fold, so the 2018 stress fold keeps the full calendar.
+- The literal largest window ends 2017-12-31 (6,994 rows, best CV MAE 150.6882, `n_estimators=72`) but contains every scoring test period. Its frozen parameters helped only 1/5 scoring folds (Dec −24.70 Wh; the other four were +0.006 to +1.20). This is not clean evidence, so the script also tunes on the largest window ending before June 2017 (2017-05-31, 2,543 rows, best CV MAE 75.9573, `n_estimators=150`).
+- MAE per fold (Wh), common hours against untuned:
+
+  | Fold | Eval h | Untuned | Largest-window frozen | Pre-scoring frozen | Best baseline |
+  |---|---:|---:|---:|---:|---:|
+  | 2017-06 | 720 | 73.60 | 74.33 (+0.73) | 73.13 (−0.47) | 83.06 |
+  | 2017-07 | 744 | 63.69 | 63.69 (+0.01) | 64.98 (+1.30) | 75.01 |
+  | 2017-08 | 744 | 59.39 | 60.58 (+1.20) | 60.24 (+0.86) | 58.93 |
+  | 2017-09_11 | 1,695 | 145.25 | 145.64 (+0.39) | 144.01 (−1.24) | 138.41 |
+  | 2017-12 | 548 | 196.39 | 171.69 (−24.70) | 168.08 (−28.31) | 47.55 |
+  | 2018-05_06 (stress, excluded) | 182 | 108.87 | 110.01 (+1.13) | 112.70 (+3.83) | 132.87 |
+
+- The pre-scoring frozen parameters helped 3/5 scoring folds and are adopted: mean MAE 102.09 vs 107.66 Wh (mean delta −5.57). Exact parameters: `max_depth=3`, `learning_rate=0.0189936`, `min_child_weight=17.4414`, `subsample=0.6232`, `colsample_bytree=0.7677`, `reg_lambda=8.2042`, `reg_alpha=0.7871`, `n_estimators=150`. The literal largest-window run remains in the artifact but is not adopted because its only meaningful gain is on test periods it trained through.
+- This is still not a December solution: 168.08 Wh versus persistence at 47.55. The 5-fold mean beats untuned but the model still has lower MAE than the best baseline on only 2/5 folds (Jun, Jul). `CHECKPOINT_PHASE9.md` records the full v1 → current → 9.3 → 9.4 → 9.5 tables and the decisions.
+- Verification: first run forced the no-calendar feature set onto the stress fold and produced 129.29 Wh there; corrected the script to apply the 9.3 rule per fold and reran, giving 112.70 Wh. Scoring folds are unchanged. `python -m pytest backend/tests -q` → **67 passed in 18.08 s**. No application code or live `results.json` changed in this item.
