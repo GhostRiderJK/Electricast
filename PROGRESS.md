@@ -92,3 +92,9 @@ One entry per iteration: date, item id, change, evidence, numbers.
 
 - `apartment_hourly()` sums W1–W3 per row with `min_count=1`, converts UTC to IST, sorts, and resamples to hourly with `sum(min_count=1)`; `build_panel()` combines all 39 apartments and keeps `n_reporting` per hour.
 - Evidence: panel is 12,891 hours × 39 apartments (2016-12-14 21:00 → 2018-06-04 23:00 IST); every apartment's non-null hourly count equals its raw row count (no bucket collisions); `n_reporting` ranges 0–39 (median 23; 26 reporting for 4,085 hours); 5,291 hours have zero apartments, reflecting the Dec-2017→May-2018 hole; 2017-11-26 03:00 IST has 39 reporting apartments with mean 82.34 Wh.
+
+## 2026-10-23 — 2.3 May-2018 UTC-offset blocks
+
+- Inspected all 39 files: 187,796 rows are stamped at :30 UTC (= exact IST hours) while 8,653 rows are at :00 UTC; 38 files contribute a May-2018 :00-UTC block (7,460 rows, 2018-05-23 19:00 → 2018-05-31 23:00 UTC). `13.csv` is only 37 rows from Nov 2017.
+- Added `ist_hour_index()` (UTC→IST, floor to containing hour) and documented the decision: :00-UTC rows fall at IST :30 and join the containing IST hour; no apartment-hour bucket is duplicated (0 across all files).
+- Evidence: after the explicit floor the panel is unchanged (12,891 × 39, max 39 reporting, median 23, 5,291 zero-report hours, checksum 63,669,648.7 Wh).

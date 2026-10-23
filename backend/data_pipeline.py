@@ -35,9 +35,14 @@ def read_apartment_file(path):
     return df
 
 
+def ist_hour_index(df):
+    """Convert UTC stamps to IST and floor each to its containing hour."""
+    return df["timestamp_utc"].dt.tz_convert(TZ).dt.floor("h")
+
+
 def apartment_hourly(df):
     """Sum the three phases and resample one apartment to IST hours."""
-    timestamps = df["timestamp_utc"].dt.tz_convert(TZ)
+    timestamps = ist_hour_index(df)
     phase_sum = df[["W1", "W2", "W3"]].sum(axis=1, min_count=1)
     series = pd.Series(phase_sum.to_numpy(), index=timestamps)
     series = series.sort_index()
