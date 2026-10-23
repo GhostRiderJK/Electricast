@@ -35,7 +35,7 @@ Rules: one task per iteration. Tick [x] only after the VERIFY step passes.
 - [x] 3.4 results.json per fold/model/metric; paired significance vs best baseline
 
 ## Phase 4 — Models
-- [ ] 4.1 XGBoost day-ahead with lags >= 24h (or direct per-horizon); leakage pytest
+- [x] 4.1 XGBoost day-ahead with lags >= 24h (or direct per-horizon); leakage pytest
 - [ ] 4.2 Calendar + holiday + semester flags + n_reporting features
 - [ ] 4.3 Weather features from Open-Meteo, cached to disk
 - [ ] 4.4 Optuna tuning on time-series CV inside train; early stopping on a train-side validation slice

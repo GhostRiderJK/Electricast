@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-23T18:19:18+05:30",
+  "generated_at": "2026-10-23T18:24:40+05:30",
   "protocol": {
     "timezone": "Asia/Kolkata",
     "target": "mean hourly load per reporting stable apartment (Wh)",
@@ -10,7 +10,8 @@
     "evaluation_mask": "target present and seasonal_naive_24 available",
     "mase_scale": "mean absolute 24-h seasonal difference over valid training pairs",
     "best_baseline_selection": "lowest MASE on the all-four-baseline mask when it covers >=50% of evaluation hours (and >=24 h); otherwise on the evaluation mask",
-    "significance": "two-sided Wilcoxon signed-rank on paired absolute errors vs the best baseline; p-values unadjusted; small_sample flags fewer than 10 pairs"
+    "significance": "two-sided Wilcoxon signed-rank on paired absolute errors vs the best baseline; p-values unadjusted; small_sample flags fewer than 10 pairs",
+    "learned_models": "fit on the fold's training window labels only; features at target hour t use observations at t-lag with lag >= 24 h, so all features predate the day's 00:00 IST origin; labels clipped at a train-only Q3+3*IQR cap"
   },
   "baselines": [
     "persistence",
@@ -23,6 +24,12 @@
     "seasonal_naive_24": "value at the same hour on the previous day",
     "same_hour_last_week": "value at the same hour one week earlier",
     "mean_last_4_same_weekdays": "mean of the same hour on the previous four same weekdays"
+  },
+  "learned_models": [
+    "xgboost"
+  ],
+  "learned_model_descriptions": {
+    "xgboost": "pooled direct day-ahead gradient-boosted trees on lags of 24-47, 168 and 336 h plus hour of day; trained only on the fold's training labels, clipped at the train-only outlier cap"
   },
   "folds": [
     {
@@ -86,6 +93,71 @@
           "bias": 30.9603,
           "R2": 0.065859,
           "sMAPE": 24.8925
+        },
+        "xgboost": {
+          "status": "ok",
+          "n": 744,
+          "MAE": 65.9478,
+          "RMSE": 87.3355,
+          "WAPE": 18.0987,
+          "MASE": 0.7794,
+          "bias": -1.6643,
+          "R2": 0.455537,
+          "sMAPE": 19.9221
+        }
+      },
+      "model_fit": {
+        "xgboost": {
+          "n_train": 1464,
+          "train_start": "2017-05-01 00:00",
+          "train_end": "2017-06-30 23:00",
+          "cap_wh": 1097.7332,
+          "n_capped": 0,
+          "params": {
+            "n_estimators": 400,
+            "learning_rate": 0.03,
+            "max_depth": 4,
+            "min_child_weight": 8,
+            "subsample": 0.8,
+            "colsample_bytree": 0.8,
+            "reg_lambda": 2.0,
+            "objective": "reg:squarederror",
+            "tree_method": "hist",
+            "random_state": 42
+          },
+          "features": [
+            "lag_24",
+            "lag_25",
+            "lag_26",
+            "lag_27",
+            "lag_28",
+            "lag_29",
+            "lag_30",
+            "lag_31",
+            "lag_32",
+            "lag_33",
+            "lag_34",
+            "lag_35",
+            "lag_36",
+            "lag_37",
+            "lag_38",
+            "lag_39",
+            "lag_40",
+            "lag_41",
+            "lag_42",
+            "lag_43",
+            "lag_44",
+            "lag_45",
+            "lag_46",
+            "lag_47",
+            "lag_168",
+            "lag_336",
+            "lag24_47_mean",
+            "lag24_47_std",
+            "lag24_47_min",
+            "lag24_47_max",
+            "hour"
+          ]
         }
       },
       "best_baseline": "seasonal_naive_24",
@@ -170,6 +242,16 @@
           "p_value": 0.0030172046759843127,
           "significant_at_0.05": true,
           "reason": null
+        },
+        "xgboost": {
+          "n_pairs": 744,
+          "median_abs_error_diff_wh": -6.8493,
+          "model_better": true,
+          "small_sample": false,
+          "statistic": 115149.0,
+          "p_value": 6.499045399687475e-05,
+          "significant_at_0.05": true,
+          "reason": null
         }
       }
     },
@@ -234,6 +316,71 @@
           "bias": -8.1135,
           "R2": 0.507356,
           "sMAPE": 17.1679
+        },
+        "xgboost": {
+          "status": "ok",
+          "n": 744,
+          "MAE": 62.3457,
+          "RMSE": 82.3659,
+          "WAPE": 17.0802,
+          "MASE": 0.7665,
+          "bias": -13.5864,
+          "R2": 0.452037,
+          "sMAPE": 17.9062
+        }
+      },
+      "model_fit": {
+        "xgboost": {
+          "n_train": 2208,
+          "train_start": "2017-05-01 00:00",
+          "train_end": "2017-07-31 23:00",
+          "cap_wh": 1014.2504,
+          "n_capped": 0,
+          "params": {
+            "n_estimators": 400,
+            "learning_rate": 0.03,
+            "max_depth": 4,
+            "min_child_weight": 8,
+            "subsample": 0.8,
+            "colsample_bytree": 0.8,
+            "reg_lambda": 2.0,
+            "objective": "reg:squarederror",
+            "tree_method": "hist",
+            "random_state": 42
+          },
+          "features": [
+            "lag_24",
+            "lag_25",
+            "lag_26",
+            "lag_27",
+            "lag_28",
+            "lag_29",
+            "lag_30",
+            "lag_31",
+            "lag_32",
+            "lag_33",
+            "lag_34",
+            "lag_35",
+            "lag_36",
+            "lag_37",
+            "lag_38",
+            "lag_39",
+            "lag_40",
+            "lag_41",
+            "lag_42",
+            "lag_43",
+            "lag_44",
+            "lag_45",
+            "lag_46",
+            "lag_47",
+            "lag_168",
+            "lag_336",
+            "lag24_47_mean",
+            "lag24_47_std",
+            "lag24_47_min",
+            "lag24_47_max",
+            "hour"
+          ]
         }
       },
       "best_baseline": "mean_last_4_same_weekdays",
@@ -318,6 +465,16 @@
           "p_value": 6.475883174742504e-14,
           "significant_at_0.05": true,
           "reason": null
+        },
+        "xgboost": {
+          "n_pairs": 744,
+          "median_abs_error_diff_wh": 0.7831,
+          "model_better": false,
+          "small_sample": false,
+          "statistic": 130489.0,
+          "p_value": 0.1681939257670353,
+          "significant_at_0.05": false,
+          "reason": null
         }
       }
     },
@@ -382,6 +539,71 @@
           "bias": 57.7159,
           "R2": -0.082931,
           "sMAPE": 100.3306
+        },
+        "xgboost": {
+          "status": "ok",
+          "n": 2243,
+          "MAE": 151.0065,
+          "RMSE": 192.4607,
+          "WAPE": 62.9529,
+          "MASE": 1.8861,
+          "bias": 69.8778,
+          "R2": 0.051525,
+          "sMAPE": 79.393
+        }
+      },
+      "model_fit": {
+        "xgboost": {
+          "n_train": 2952,
+          "train_start": "2017-05-01 00:00",
+          "train_end": "2017-08-31 23:00",
+          "cap_wh": 977.3262,
+          "n_capped": 0,
+          "params": {
+            "n_estimators": 400,
+            "learning_rate": 0.03,
+            "max_depth": 4,
+            "min_child_weight": 8,
+            "subsample": 0.8,
+            "colsample_bytree": 0.8,
+            "reg_lambda": 2.0,
+            "objective": "reg:squarederror",
+            "tree_method": "hist",
+            "random_state": 42
+          },
+          "features": [
+            "lag_24",
+            "lag_25",
+            "lag_26",
+            "lag_27",
+            "lag_28",
+            "lag_29",
+            "lag_30",
+            "lag_31",
+            "lag_32",
+            "lag_33",
+            "lag_34",
+            "lag_35",
+            "lag_36",
+            "lag_37",
+            "lag_38",
+            "lag_39",
+            "lag_40",
+            "lag_41",
+            "lag_42",
+            "lag_43",
+            "lag_44",
+            "lag_45",
+            "lag_46",
+            "lag_47",
+            "lag_168",
+            "lag_336",
+            "lag24_47_mean",
+            "lag24_47_std",
+            "lag24_47_min",
+            "lag24_47_max",
+            "hour"
+          ]
         }
       },
       "best_baseline": "persistence",
@@ -466,6 +688,16 @@
           "p_value": 1.2394368135468965e-35,
           "significant_at_0.05": true,
           "reason": null
+        },
+        "xgboost": {
+          "n_pairs": 2243,
+          "median_abs_error_diff_wh": 10.0709,
+          "model_better": false,
+          "small_sample": false,
+          "statistic": 1006421.5,
+          "p_value": 2.1810599128942373e-16,
+          "significant_at_0.05": true,
+          "reason": null
         }
       }
     },
@@ -530,6 +762,71 @@
           "bias": null,
           "R2": null,
           "sMAPE": null
+        },
+        "xgboost": {
+          "status": "ok",
+          "n": 182,
+          "MAE": 142.5857,
+          "RMSE": 183.8031,
+          "WAPE": 30.3915,
+          "MASE": 1.3887,
+          "bias": -123.8647,
+          "R2": -0.093224,
+          "sMAPE": 34.6932
+        }
+      },
+      "model_fit": {
+        "xgboost": {
+          "n_train": 5195,
+          "train_start": "2017-05-01 00:00",
+          "train_end": "2017-12-31 23:00",
+          "cap_wh": 1042.1648,
+          "n_capped": 1,
+          "params": {
+            "n_estimators": 400,
+            "learning_rate": 0.03,
+            "max_depth": 4,
+            "min_child_weight": 8,
+            "subsample": 0.8,
+            "colsample_bytree": 0.8,
+            "reg_lambda": 2.0,
+            "objective": "reg:squarederror",
+            "tree_method": "hist",
+            "random_state": 42
+          },
+          "features": [
+            "lag_24",
+            "lag_25",
+            "lag_26",
+            "lag_27",
+            "lag_28",
+            "lag_29",
+            "lag_30",
+            "lag_31",
+            "lag_32",
+            "lag_33",
+            "lag_34",
+            "lag_35",
+            "lag_36",
+            "lag_37",
+            "lag_38",
+            "lag_39",
+            "lag_40",
+            "lag_41",
+            "lag_42",
+            "lag_43",
+            "lag_44",
+            "lag_45",
+            "lag_46",
+            "lag_47",
+            "lag_168",
+            "lag_336",
+            "lag24_47_mean",
+            "lag24_47_std",
+            "lag24_47_min",
+            "lag24_47_max",
+            "hour"
+          ]
         }
       },
       "best_baseline": "seasonal_naive_24",
@@ -614,6 +911,16 @@
           "p_value": null,
           "significant_at_0.05": null,
           "reason": "no paired hours"
+        },
+        "xgboost": {
+          "n_pairs": 182,
+          "median_abs_error_diff_wh": 11.6855,
+          "model_better": false,
+          "small_sample": false,
+          "statistic": 7515.0,
+          "p_value": 0.2541970416739031,
+          "significant_at_0.05": false,
+          "reason": null
         }
       }
     }

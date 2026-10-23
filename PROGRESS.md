@@ -148,6 +148,13 @@ One entry per iteration: date, item id, change, evidence, numbers.
 - Edge cases verified: identical predictions → `n_pairs=30`, `reason="all paired differences are zero"`; a model with a uniform 0.5-Wh-lower absolute error over 30 pairs → `model_better=True`, p = 4.3e-8; 5 pairs → `small_sample=True`; disjoint indexes → `n_pairs=0`, `reason="no paired hours"`. A schema assertion checks all four fold ids, the nine metric keys per model, the paired keys, and that every float in the file is finite.
 - Wrote `CHECKPOINT_EVAL.md` with the protocol, fold table, selection rules, and limitations.
 
+## 2026-10-23 — 4.1 XGBoost day-ahead model
+
+- Added `backend/forecast_model.py`: one pooled direct model per fold on `lag_24`…`lag_47`, `lag_168`, `lag_336`, four aggregates of the 24–47 h block, and hour of day. Every feature is at least 24 h old, so no feature reads the forecast day. Models are fit on the fold's training labels only; labels are clipped at the train-only Q3+3×IQR cap, and negative outputs are clipped to 0.
+- Added `backend/tests/test_leakage.py` with five tests (pytest 8.4.2, newly pinned in `requirements.txt`): all lags are ≥24 h; the feature frame for a test day is unchanged when every value from that day's origin onward is replaced with 1e9; all four baselines are unchanged under the same mutation; XGBoost predictions are unchanged; and training labels end before the test day. `python -m pytest backend/tests -q` → 5 passed.
+- Backtest (same four folds and evaluation mask): XGBoost MAE 65.95 in Jul (best baseline 75.01; paired median −6.85 Wh, p = 6.5e-05), 62.35 in Aug (best mean-of-4 58.93; +0.78 Wh, p = 0.168), 151.01 in Sep–Dec (persistence 116.21; +10.07 Wh, p = 2.2e-16), and 142.59 in May–Jun (seasonal naive 132.87; +11.69 Wh, p = 0.254). The first learned model beats the best baseline significantly only in the July fold; the autumn fold has a +69.88 Wh bias after training on May–Aug.
+- `backend/results.json` now records the XGBoost metrics, fit metadata (`n_train`, cap, number capped, params, feature list), and its paired comparison in every fold.
+
 
 
 

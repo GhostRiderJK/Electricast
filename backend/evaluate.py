@@ -13,6 +13,7 @@ import pandas as pd
 from scipy.stats import wilcoxon
 
 import data_pipeline as dp
+import forecast_model as fm
 
 RESULTS_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "results.json")
 
@@ -23,11 +24,17 @@ BASELINES = (
     "mean_last_4_same_weekdays",
 )
 
+LEARNED_MODELS = ("xgboost",)
+
 BASELINE_DESCRIPTIONS = {
     "persistence": "last observed value before the forecast day, held flat for 24 h",
     "seasonal_naive_24": "value at the same hour on the previous day",
     "same_hour_last_week": "value at the same hour one week earlier",
     "mean_last_4_same_weekdays": "mean of the same hour on the previous four same weekdays",
+}
+
+LEARNED_MODEL_DESCRIPTIONS = {
+    "xgboost": "pooled direct day-ahead gradient-boosted trees on lags of 24-47, 168 and 336 h plus hour of day; trained only on the fold's training labels, clipped at the train-only outlier cap",
 }
 
 FOLDS = (
@@ -72,6 +79,7 @@ PROTOCOL = {
     "mase_scale": "mean absolute 24-h seasonal difference over valid training pairs",
     "best_baseline_selection": "lowest MASE on the all-four-baseline mask when it covers >=50% of evaluation hours (and >=24 h); otherwise on the evaluation mask",
     "significance": "two-sided Wilcoxon signed-rank on paired absolute errors vs the best baseline; p-values unadjusted; small_sample flags fewer than 10 pairs",
+    "learned_models": "fit on the fold's training window labels only; features at target hour t use observations at t-lag with lag >= 24 h, so all features predate the day's 00:00 IST origin; labels clipped at a train-only Q3+3*IQR cap",
 }
 
 
@@ -232,7 +240,7 @@ def select_best_baseline(actual, preds, eval_mask, scale):
 
 
 def evaluate_fold(series, fold):
-    """Score all baselines on one day-ahead fold.
+    """Score baselines and learned models on one day-ahead fold.
 
     The evaluation mask is every hour with a target value and a seasonal-naive
     forecast, so all models are scored on the same hours within a fold.
@@ -241,17 +249,27 @@ def evaluate_fold(series, fold):
     scale = mase_scale(train)
     actual = series.reindex(test_hours(fold["test_start"], fold["test_end"]))
     preds = baseline_forecasts(series, fold["test_start"], fold["test_end"])
+    model_fit = {}
+    for name in LEARNED_MODELS:
+        if name == "xgboost":
+            preds[name], model_fit[name] = fm.forecast(
+                series,
+                fold["train_start"],
+                fold["train_end"],
+                fold["test_start"],
+                fold["test_end"],
+            )
     mask = actual.notna() & preds["seasonal_naive_24"].notna()
 
     models = {}
-    for name in BASELINES:
+    for name in BASELINES + LEARNED_MODELS:
         models[name] = compute_metrics(actual[mask], preds[name][mask], scale)
 
     best, selection_mask, selection_hours, selection_metrics = select_best_baseline(
         actual, preds, mask, scale
     )
     paired = {}
-    for name in BASELINES:
+    for name in models:
         if name == best:
             continue
         paired[name] = paired_significance(
@@ -280,6 +298,7 @@ def evaluate_fold(series, fold):
         },
         "mase_scale": _clean(scale, 4),
         "models": models,
+        "model_fit": model_fit,
         "best_baseline": best,
         "selection": {
             "mask": selection_mask,
@@ -303,6 +322,8 @@ def build_results(series=None):
         "protocol": dict(PROTOCOL),
         "baselines": list(BASELINES),
         "baseline_descriptions": dict(BASELINE_DESCRIPTIONS),
+        "learned_models": list(LEARNED_MODELS),
+        "learned_model_descriptions": dict(LEARNED_MODEL_DESCRIPTIONS),
         "folds": run_backtest(series),
     }
 
@@ -357,12 +378,15 @@ def main():
               f"{test['eval_days']} d, MASE scale {_show(fold['mase_scale'])}")
         print(f"{'model':28s} {'n':>5s} {'MAE':>8s} {'RMSE':>8s} {'WAPE%':>8s} "
               f"{'MASE':>7s} {'bias':>8s} {'R2':>8s} {'sMAPE%':>8s}")
-        for name in BASELINES:
+        for name in results["baselines"] + results["learned_models"]:
             m = fold["models"][name]
             print(f"{name:28s} {m['n']:5d} {_show(m['MAE']):>8s} {_show(m['RMSE']):>8s} "
                   f"{_show(m['WAPE']):>8s} {_show(m['MASE'], 3):>7s} "
                   f"{_show(m['bias']):>8s} {_show(m['R2'], 4):>8s} "
                   f"{_show(m['sMAPE']):>8s}")
+        for name, meta in fold["model_fit"].items():
+            print(f"fit {name}: n={meta['n_train']}, cap={_show(meta['cap_wh'])} Wh, "
+                  f"capped={meta['n_capped']}")
         selection = fold["selection"]
         print(f"best baseline: {fold['best_baseline']} "
               f"({selection['mask']}, {selection['hours']} h, by {selection['by']})")
