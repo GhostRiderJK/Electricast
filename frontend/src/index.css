@@ -30,3 +30,18 @@ button:focus-visible {
 ::-webkit-scrollbar-track { background: #f4f6f8; }
 ::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 4px; }
 ::-webkit-scrollbar-thumb:hover { background: #9ca3af; }
+
+/* Prevent grid children (chart canvases) from forcing their track wider. */
+main [style*="display: grid"] > *,
+main [style*="display:grid"] > * {
+  min-width: 0;
+}
+
+@media print {
+  body { background: #fff !important; }
+  header, footer, button { display: none !important; }
+  main { max-width: none !important; padding: 0 !important; }
+  * { box-shadow: none !important; }
+  canvas { max-width: 100% !important; }
+  div { break-inside: avoid; }
+}

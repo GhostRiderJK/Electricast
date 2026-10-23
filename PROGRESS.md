@@ -62,3 +62,9 @@ One entry per iteration: date, item id, change, evidence, numbers.
 - MetricsBar R²: green at ≥0.8, red only when negative, neutral otherwise (was green only >0.85, so the real 0.8238 was shown red).
 - UploadPage R² card is red when the uploaded-data score is negative, green otherwise.
 - Evidence: live computed styles — XGBoost `0.8238` → `rgb(22,163,74)` green, SARIMA `-1.3261` → `rgb(220,38,38)` red; uploading `smart_home_dataset.csv` through the real file input produced R² `-0.6799` rendered `rgb(220,38,38)`. Build passed (44 modules, 1.51s).
+
+## 2026-10-23 — 1.8 Layout fixes and compact metrics bar
+
+- `MetricsBar` is now a compact single-line card per model (inline R²/RMSE/MAE/sMAPE, description moved to the card `title`); only `status === "ok"` models render and the loading skeleton shrank from 160px to 52px.
+- `index.css` adds `min-width: 0` to grid children (chart canvases can no longer widen their track) and a print stylesheet that hides header/footer/buttons, removes shadows/padding, and prevents cards breaking across pages.
+- Evidence: production build passed (44 modules, CSS 0.92 kB); built CSS contains one `@media print` block; live page at :3100 measured each metric card at 48px high (previously 160px) with SARIMA −1.3261 red and XGBoost 0.8238 green; `main` scrollWidth 600 = viewport 599 with no overflowing descendants; screenshot confirms compact two-card bar above Dataset Overview.

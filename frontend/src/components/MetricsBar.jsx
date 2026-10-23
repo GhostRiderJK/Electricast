@@ -10,62 +10,52 @@ const MODEL_CONFIG = {
 function MetricCard({ model, metrics }) {
   const cfg = MODEL_CONFIG[model];
   if (!cfg || !metrics) return null;
+  const items = [
+    { k: "R²",    v: metrics.R2.toFixed(4),     good: metrics.R2 >= 0.8 ? true : metrics.R2 < 0 ? false : null },
+    { k: "RMSE",  v: `${metrics.RMSE.toFixed(0)} Wh`, good: null },
+    { k: "MAE",   v: `${metrics.MAE.toFixed(0)} Wh`,  good: null },
+    { k: "sMAPE", v: `${metrics.sMAPE.toFixed(2)}%`,  good: metrics.sMAPE < 15 },
+  ];
+
   return (
-    <div style={{
+    <div title={metrics.description} style={{
+      flex: "1 1 380px", minWidth: 0,
+      display: "flex", alignItems: "center", gap: 12,
       background: "#fff",
       border: `1.5px solid ${cfg.accent}22`,
-      borderRadius: 12,
-      padding: "18px 20px",
-      flex: 1,
-      minWidth: 0,
-      position: "relative",
-      overflow: "hidden",
+      borderLeft: `3px solid ${cfg.accent}`,
+      borderRadius: 10,
+      padding: "8px 14px",
     }}>
-      <div style={{
-        position: "absolute", top: 0, left: 0, width: 4,
-        height: "100%", background: cfg.accent, borderRadius: "12px 0 0 12px"
-      }}/>
-      <div style={{ paddingLeft: 4 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
-          <span style={{
-            fontSize: 18, background: cfg.bg,
-            width: 34, height: 34, borderRadius: 8,
-            display: "flex", alignItems: "center", justifyContent: "center",
-            color: cfg.accent
-          }}>{cfg.icon}</span>
-          <div>
-            <div style={{ fontSize: 13, fontWeight: 700, color: "#111827", fontFamily: "'IBM Plex Mono', monospace" }}>
-              {cfg.label}
-            </div>
-            <div style={{ fontSize: 10, color: "#9ca3af", fontFamily: "'IBM Plex Sans', sans-serif", marginTop: 1 }}>
-              {metrics.period}
-            </div>
-          </div>
-        </div>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px 16px" }}>
-          {[
-            { k: "R²",    v: metrics.R2.toFixed(4),     good: metrics.R2 >= 0.8 ? true : metrics.R2 < 0 ? false : null },
-            { k: "RMSE",  v: `${metrics.RMSE.toFixed(0)} Wh`, good: null },
-            { k: "MAE",   v: `${metrics.MAE.toFixed(0)} Wh`,  good: null },
-            { k: "sMAPE", v: `${metrics.sMAPE.toFixed(2)}%`,  good: metrics.sMAPE < 15 },
-          ].map(({ k, v, good }) => (
-            <div key={k}>
-              <div style={{ fontSize: 10, color: "#6b7280", fontFamily: "'IBM Plex Sans', sans-serif", marginBottom: 2 }}>{k}</div>
-              <div style={{
-                fontSize: 15, fontWeight: 700,
-                fontFamily: "'IBM Plex Mono', monospace",
-                color: good === true ? "#16a34a" : good === false ? "#dc2626" : "#111827"
-              }}>{v}</div>
-            </div>
-          ))}
-        </div>
+      <span style={{
+        fontSize: 15, background: cfg.bg, width: 28, height: 28, borderRadius: 7,
+        display: "flex", alignItems: "center", justifyContent: "center",
+        color: cfg.accent, flexShrink: 0,
+      }}>{cfg.icon}</span>
+      <div style={{ minWidth: 0 }}>
         <div style={{
-          marginTop: 12, fontSize: 10, color: "#9ca3af",
-          fontFamily: "'IBM Plex Sans', sans-serif",
-          lineHeight: 1.5, borderTop: "1px solid #f3f4f6", paddingTop: 10
-        }}>
-          {metrics.description}
-        </div>
+          fontSize: 12, fontWeight: 700, color: "#111827",
+          fontFamily: "'IBM Plex Mono', monospace", lineHeight: 1.2,
+        }}>{cfg.label}</div>
+        <div style={{
+          fontSize: 9, color: "#9ca3af", fontFamily: "'IBM Plex Sans', sans-serif",
+          whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+        }}>{metrics.period}</div>
+      </div>
+      <div style={{ display: "flex", gap: 16, marginLeft: "auto", flexShrink: 0 }}>
+        {items.map(({ k, v, good }) => (
+          <div key={k} style={{ textAlign: "right" }}>
+            <div style={{
+              fontSize: 9, color: "#6b7280",
+              fontFamily: "'IBM Plex Sans', sans-serif", marginBottom: 1,
+            }}>{k}</div>
+            <div style={{
+              fontSize: 13, fontWeight: 700,
+              fontFamily: "'IBM Plex Mono', monospace",
+              color: good === true ? "#16a34a" : good === false ? "#dc2626" : "#111827",
+            }}>{v}</div>
+          </div>
+        ))}
       </div>
     </div>
   );
@@ -75,11 +65,11 @@ export default function MetricsBar() {
   const { data, loading } = useData(api.metrics);
 
   if (loading) return (
-    <div style={{ display: "flex", gap: 12 }}>
-      {[0,1,2].map(i => (
+    <div style={{ display: "flex", gap: 10 }}>
+      {[0, 1].map(i => (
         <div key={i} style={{
-          flex: 1, height: 160, background: "#f9fafb",
-          borderRadius: 12, animation: "pulse 1.5s ease-in-out infinite"
+          flex: 1, height: 52, background: "#f9fafb",
+          borderRadius: 10, animation: "pulse 1.5s ease-in-out infinite"
         }}/>
       ))}
     </div>
@@ -90,10 +80,10 @@ export default function MetricsBar() {
   );
 
   return (
-    <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+    <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
       {active.map(model => (
-    <MetricCard key={model} model={model} metrics={data?.[model] ?? null} />
-    ))}
+        <MetricCard key={model} model={model} metrics={data?.[model] ?? null} />
+      ))}
     </div>
   );
 }

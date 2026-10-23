@@ -14,7 +14,7 @@ Rules: one task per iteration. Tick [x] only after the VERIFY step passes.
 - [x] 1.5 Split label computed from statistics, not hardcoded 80/20
 - [x] 1.6 EDA timezone label IST; header subtitle says IIT Bombay residential buildings
 - [x] 1.7 MetricsBar R² color thresholds; UploadPage negative R² shown red
-- [ ] 1.8 Layout: min-width:0 on grid children, print CSS, compact single MetricsBar
+- [x] 1.8 Layout: min-width:0 on grid children, print CSS, compact single MetricsBar
 - [ ] 1.9 PredictionsPage: no setState in render; real days 1–31 in the day picker
 - [ ] 1.10 Contrast pass; api.js same-origin base URL; useData with AbortController and visible errors
 
