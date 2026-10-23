@@ -5,7 +5,7 @@ python-multipart==0.0.9
 pandas==3.1.0
 scikit-learn==1.9.1
 statsmodels==0.15.0
-xgboost==3.4.1
-torch==2.14.1
+xgboost==3.4.1; platform_system != "Linux"
+xgboost-cpu==3.4.1; platform_system == "Linux"
 pytest==8.4.2
 optuna==5.0.0
