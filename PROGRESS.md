@@ -81,3 +81,9 @@ One entry per iteration: date, item id, change, evidence, numbers.
 - `useData` creates an `AbortController`, passes its signal to every fetcher, aborts on unmount/dependency change, and ignores abort rejections; all pages plus MetricsBar render a new `DataError` alert on failure.
 - Contrast pass: muted text `#9ca3af`→`#4b5563` (2.31–2.54 → 6.87–7.56), green text `#16a34a`→`#15803d` (3.00–3.30 → 4.56–5.02), red small text on tints→`#b91c1c`; chart tick labels darkened in `chartConfig`.
 - Evidence: build passed (45 modules, 1.77s); preview at :3101 loaded with all API requests same-origin (`/api/...` on localhost:3101) and zero alerts; computed-style WCAG scan found 0 failures across EDA (48 text nodes), Predictions (36), Weekly (28), Metrics (60), Upload (30); stopping the backend showed `Could not load model metrics: API error 500: /api/metrics` and `Could not load EDA data: API error 500: /api/eda/hourly`; dev StrictMode run recorded aborts for `/api/predictions/{monthly,daily,monthly_errors}` and `/api/eda/statistics`, then refetched successfully with no console warnings.
+
+## 2026-10-23 — 2.1 Raw data loader
+
+- Added `backend/data_pipeline.py` with `load_apartments()`: reads every `data/*.csv`, validates `TS,W1,W2,W3`, parses UTC timestamps, and returns a per-file report of rows and IST/UTC ranges.
+- Missing/empty/malformed/wrong-schema files are recorded as failures with their exception type; there is no bare or swallowing `except`.
+- Evidence: 39/39 files read, 0 failed, 196,449 rows, range 2016-12-14 15:30 UTC → 2018-06-04 18:00 UTC (2016-12-14 21:00 → 2018-06-04 23:30 IST); a temp-directory test with empty, wrong-column and broken CSV files returned `read_ok=1, failed=3` with `ValueError/ParserError` entries and no crash.

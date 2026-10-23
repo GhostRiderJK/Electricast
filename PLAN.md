@@ -19,7 +19,7 @@ Rules: one task per iteration. Tick [x] only after the VERIFY step passes.
 - [x] 1.10 Contrast pass; api.js same-origin base URL; useData with AbortController and visible errors
 
 ## Phase 2 — Data pipeline (backend/data_pipeline.py)
-- [ ] 2.1 Load all 39 files, full date range; count read vs failed; no bare except
+- [x] 2.1 Load all 39 files, full date range; count read vs failed; no bare except
 - [ ] 2.2 Per-apartment hourly resample with sum(min_count=1); keep n_reporting
 - [ ] 2.3 Inspect the May-2018 :00-UTC file(s); document handling in DECISIONS.md
 - [ ] 2.4 Target = mean load per reporting apartment; build stable panel (>90% coverage)
