@@ -31,6 +31,12 @@ HOLIDAYS = frozenset({
 # Assumed academic terms: Jan-Apr and Jul-Nov in session, May-Jun and Dec breaks.
 SEMESTER_MONTHS = frozenset({1, 2, 3, 4, 7, 8, 9, 10, 11})
 
+FEATURE_DEFAULTS = {
+    "drop_annual_calendar": False,
+    "use_weather": True,
+    "oracle_temperature": False,
+}
+
 DEFAULT_PARAMS = {
     "n_estimators": 400,
     "learning_rate": 0.03,
@@ -52,13 +58,19 @@ EARLY_STOPPING_ROUNDS = 25
 MAX_ESTIMATORS = 800
 
 
-def make_features(series, hours, reporting=None, weather=None):
+def make_features(series, hours, reporting=None, weather=None,
+                  feature_options=None):
     """Build lag, calendar and weather features for the given target hours.
 
     `hours` must be tz-aware IST timestamps. Reporting counts and weather, when
     supplied, are lagged by at least 24 h so they cannot reveal the forecast
     day. Missing history stays NaN; XGBoost handles it natively.
+
+    `feature_options` is an ablation switch used by scripts/feature_ablation.py.
+    The oracle option adds target-hour temperature, which is not known at the
+    forecast origin and must never be treated as a deployable result.
     """
+    options = {**FEATURE_DEFAULTS, **(feature_options or {})}
     hours = pd.DatetimeIndex(hours)
     block = {}
     for lag in FEATURE_LAGS:
@@ -77,9 +89,10 @@ def make_features(series, hours, reporting=None, weather=None):
     block["hour"] = local.hour.to_numpy(dtype=int)
     block["dow"] = local.day_of_week.to_numpy(dtype=int)
     block["is_weekend"] = (local.day_of_week.to_numpy() >= 5).astype(int)
-    block["month"] = local.month.to_numpy(dtype=int)
-    block["doy_sin"] = np.sin(2 * np.pi * day_of_year / 365.25)
-    block["doy_cos"] = np.cos(2 * np.pi * day_of_year / 365.25)
+    if not options["drop_annual_calendar"]:
+        block["month"] = local.month.to_numpy(dtype=int)
+        block["doy_sin"] = np.sin(2 * np.pi * day_of_year / 365.25)
+        block["doy_cos"] = np.cos(2 * np.pi * day_of_year / 365.25)
     block["is_holiday"] = np.array(
         [int(day in HOLIDAYS) for day in local.strftime("%Y-%m-%d")], dtype=int
     )
@@ -97,7 +110,7 @@ def make_features(series, hours, reporting=None, weather=None):
         })
         block["n_reporting_lag24_47_mean"] = counts.mean(axis=1).to_numpy()
 
-    if weather is not None:
+    if weather is not None and options["use_weather"]:
         for name in weather.columns:
             block[f"weather_{name}_lag_24"] = weather[name].reindex(
                 hours - pd.Timedelta(hours=24)
@@ -117,6 +130,12 @@ def make_features(series, hours, reporting=None, weather=None):
         block["weather_precip_lag24_47_sum"] = lagged["precipitation"].sum(
             axis=1, min_count=1
         ).to_numpy()
+    if options["oracle_temperature"]:
+        if weather is None or "temperature_2m" not in weather:
+            raise ValueError("oracle temperature needs the weather frame")
+        block["oracle_temperature_same_hour"] = weather["temperature_2m"].reindex(
+            hours
+        ).to_numpy(dtype=float)
     return pd.DataFrame(block, index=hours)
 
 
@@ -145,8 +164,12 @@ def _hour_range(start, end):
     return pd.date_range(start_ts, end_ts, freq="h", tz=dp.TZ)
 
 
-def _training_frame(series, hours, reporting=None, weather=None):
-    features = make_features(series, hours, reporting=reporting, weather=weather)
+def _training_frame(series, hours, reporting=None, weather=None,
+                    feature_options=None):
+    features = make_features(
+        series, hours, reporting=reporting, weather=weather,
+        feature_options=feature_options,
+    )
     labels = series.reindex(hours).astype(float)
     keep = labels.notna() & features["lag_24"].notna()
     return features.loc[keep], labels.loc[keep]
@@ -214,7 +237,8 @@ def _sample_params(trial):
     }
 
 
-def _prepare_cv(series, splits, reporting=None, weather=None):
+def _prepare_cv(series, splits, reporting=None, weather=None,
+                feature_options=None):
     prepared = []
     for split in splits:
         x_train, y_train = _training_frame(
@@ -222,6 +246,7 @@ def _prepare_cv(series, splits, reporting=None, weather=None):
             _hour_range(split["train_start"], split["train_end"]),
             reporting=reporting,
             weather=weather,
+            feature_options=feature_options,
         )
         y_train, _, _ = _capped(y_train)
         x_val, y_val = _training_frame(
@@ -229,6 +254,7 @@ def _prepare_cv(series, splits, reporting=None, weather=None):
             _hour_range(split["val_start"], split["val_end"]),
             reporting=reporting,
             weather=weather,
+            feature_options=feature_options,
         )
         if len(x_train) and len(x_val):
             prepared.append((x_train, y_train, x_val, y_val))
@@ -246,12 +272,15 @@ def _cv_mae(params, prepared):
 
 
 def tune(series, train_start, train_end, reporting=None, weather=None,
-         n_trials=TUNE_TRIALS, seed=42):
+         feature_options=None, n_trials=TUNE_TRIALS, seed=42):
     """Tune hyperparameters on expanding-window CV inside the training window."""
     splits = time_series_splits(train_start, train_end)
     if not splits:
         raise ValueError("training window is too short for time-series CV")
-    prepared = _prepare_cv(series, splits, reporting=reporting, weather=weather)
+    prepared = _prepare_cv(
+        series, splits, reporting=reporting, weather=weather,
+        feature_options=feature_options,
+    )
     if not prepared:
         raise ValueError("no usable CV split inside the training window")
     study = optuna.create_study(
@@ -265,10 +294,10 @@ def tune(series, train_start, train_end, reporting=None, weather=None,
 
 
 def _fit_tuned(series, train_start, train_end, reporting=None, weather=None,
-               n_trials=TUNE_TRIALS):
+               feature_options=None, n_trials=TUNE_TRIALS):
     best, cv_mae, splits = tune(
         series, train_start, train_end, reporting=reporting, weather=weather,
-        n_trials=n_trials,
+        feature_options=feature_options, n_trials=n_trials,
     )
     params = dict(best)
     params.update({
@@ -280,7 +309,10 @@ def _fit_tuned(series, train_start, train_end, reporting=None, weather=None,
         "early_stopping_rounds": EARLY_STOPPING_ROUNDS,
     })
 
-    prepared = _prepare_cv(series, splits, reporting=reporting, weather=weather)
+    prepared = _prepare_cv(
+        series, splits, reporting=reporting, weather=weather,
+        feature_options=feature_options,
+    )
     best_iterations = []
     for x_train, y_train, x_val, y_val in prepared:
         early = xgb.XGBRegressor(**params)
@@ -292,6 +324,7 @@ def _fit_tuned(series, train_start, train_end, reporting=None, weather=None,
     x_all, y_all = _training_frame(
         series, _hour_range(train_start, train_end),
         reporting=reporting, weather=weather,
+        feature_options=feature_options,
     )
     y_all, cap, n_capped = _capped(y_all)
     final_params = {
@@ -312,6 +345,7 @@ def _fit_tuned(series, train_start, train_end, reporting=None, weather=None,
             key: value for key, value in final_params.items() if key != "n_jobs"
         },
         "features": list(x_all.columns),
+        "feature_options": {**FEATURE_DEFAULTS, **(feature_options or {})},
         "importance": _gain_importance(model, x_all.columns),
         "tuning": {
             "n_trials": int(n_trials),
@@ -328,7 +362,8 @@ def _fit_tuned(series, train_start, train_end, reporting=None, weather=None,
 
 
 def fit(series, train_start, train_end, params=None, reporting=None,
-        weather=None, tune_model=False, n_trials=TUNE_TRIALS):
+        weather=None, tune_model=False, n_trials=TUNE_TRIALS,
+        feature_options=None):
     """Fit one pooled model on the training window.
 
     With `tune_model`, Optuna selects hyperparameters on expanding-window CV
@@ -338,12 +373,14 @@ def fit(series, train_start, train_end, params=None, reporting=None,
     if tune_model:
         return _fit_tuned(
             series, train_start, train_end, reporting=reporting,
-            weather=weather, n_trials=n_trials,
+            weather=weather, feature_options=feature_options,
+            n_trials=n_trials,
         )
 
     hours = _hour_range(train_start, train_end)
     features, labels = _training_frame(
-        series, hours, reporting=reporting, weather=weather
+        series, hours, reporting=reporting, weather=weather,
+        feature_options=feature_options,
     )
     labels, cap, n_capped = _capped(labels)
 
@@ -361,16 +398,19 @@ def fit(series, train_start, train_end, params=None, reporting=None,
         "n_capped": int(n_capped),
         "params": {k: v for k, v in effective.items() if k != "n_jobs"},
         "features": list(features.columns),
+        "feature_options": {**FEATURE_DEFAULTS, **(feature_options or {})},
         "importance": _gain_importance(model, features.columns),
     }
     return model, metadata
 
 
-def predict(series, model, start, end, reporting=None, weather=None):
+def predict(series, model, start, end, reporting=None, weather=None,
+            feature_options=None):
     """Predict every hour in [start, end]; negative loads are clipped to zero."""
     hours = _hour_range(start, end)
     features = make_features(
-        series, hours, reporting=reporting, weather=weather
+        series, hours, reporting=reporting, weather=weather,
+        feature_options=feature_options,
     )
     values = model.predict(features).astype(float)
     return pd.Series(np.maximum(values, 0.0), index=hours, name="xgboost")
@@ -378,12 +418,14 @@ def predict(series, model, start, end, reporting=None, weather=None):
 
 def forecast(series, train_start, train_end, test_start, test_end, params=None,
              reporting=None, weather=None, tune_model=False,
-             n_trials=TUNE_TRIALS):
+             n_trials=TUNE_TRIALS, feature_options=None):
     """Fit on the training window and forecast the test window."""
     model, metadata = fit(
         series, train_start, train_end, params=params, reporting=reporting,
         weather=weather, tune_model=tune_model, n_trials=n_trials,
+        feature_options=feature_options,
     )
     return predict(
-        series, model, test_start, test_end, reporting=reporting, weather=weather
+        series, model, test_start, test_end, reporting=reporting, weather=weather,
+        feature_options=feature_options,
     ), metadata

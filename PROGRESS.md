@@ -299,3 +299,21 @@ One entry per iteration: date, item id, change, evidence, numbers.
 - Reran `python backend/evaluate.py` (6m25s) and rebuilt the summary. Month/seasonality features are still the full calendar set; 9.3 tests dropping month/day-of-year on shorter windows.
 - Verification: `python -m pytest backend/tests -q` → 56 passed (new fold-layout, history-start and stress-exclusion tests for both the API summary and assistant tools). `python backend/scripts/check_chat.py` → 3/3 stub checks, 16 derived values matching the new artifact (SARIMA 81.6991 Wh, 3,762 of 4,451 scoring-fold hours; Dec XGBoost MAE 175.59). Browser on a fresh backend (:8002) and Vite (:3010): the Metrics page shows "5-fold day-ahead backtest + stress test", six fold chips with "excluded from means", per-fold means 5-fold counts, and a stress column; Predictions offers Jun 2017 dates and updated pooled subtitle; Limitations shows "5 scoring + 1 stress · 4,633 h" and the new caution. Console had only Vite/React dev messages; no mojibake.
 - Fixed a real Windows-only bug found in that browser pass: `main.py` opened JSON artifacts with the locale codec, corrupting the stress label's en dash. All three artifact loads now use `encoding="utf-8"`; the API and UI render "Stress test (May–Jun 2018)" correctly. `npm run build` → 49 modules, 407.57 kB (gzip 129.72 kB).
+
+## 2026-10-23 — 9.3 Feature ablation
+
+- Added opt-in feature switches to `forecast_model.make_features`/`fit`/`predict`/`forecast`: drop `month`, `doy_sin`, `doy_cos`; omit weather; add target-hour temperature (oracle only). Defaults reproduce the production feature set exactly, and the chosen options are recorded in fit metadata.
+- Added `backend/scripts/feature_ablation.py`, which runs the four variants on the same six folds with untuned `DEFAULT_PARAMS`, the same evaluation mask, train-only cap, and reporting features, and writes `backend/ablation_results.json`. The full model is the within-ablation baseline; the 2018 stress test is shown but excluded from the keep decision.
+- MAE per fold (Wh), scoring folds first:
+
+  | Fold | Eval h | Full | No annual calendar | No weather | ORACLE same-hour temp |
+  |---|---:|---:|---:|---:|---:|
+  | 2017-06 | 720 | 74.12 | 73.60 | 75.26 | 75.53 |
+  | 2017-07 | 744 | 63.48 | 63.69 | 63.87 | 63.30 |
+  | 2017-08 | 744 | 59.88 | 59.39 | 61.09 | 59.53 |
+  | 2017-09_11 | 1,695 | 145.32 | 145.25 | 143.54 | 146.18 |
+  | 2017-12 | 548 | 227.67 | 196.39 | 215.11 | 219.44 |
+  | 2018-05_06 (stress, excluded) | 182 | 108.87 | 108.87 (not applied) | 99.75 | 104.84 |
+
+- Summary vs full features: no annual calendar helped 4/5 scoring folds (mean 107.66 Wh, mean delta −6.43; Dec −31.28, other wins ≤0.53, Jul +0.21) and is kept. No weather helped 2/5 (mean 111.77, delta −2.32) and is discarded. ORACLE helped 3/5 (mean 112.80, delta −1.30) but is diagnostic only and can never be kept or become the winner. Winner: `no_annual_calendar` (`drop_annual_calendar: true`), which 9.4 will use as the comparison config.
+- Verification: `python -m pytest backend/tests -q` → **60 passed in 16.76 s** (four new tests: calendar columns drop while hour/dow/holiday/semester stay; weather columns drop; oracle feature is opt-in and reads the target hour; feature options reach fit metadata). The default feature path is unchanged, so `results.json` was not regenerated for this item.

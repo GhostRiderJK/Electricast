@@ -274,3 +274,66 @@ def test_sarima_skips_state_older_than_staleness_limit():
     assert pred.isna().all()
     assert metadata["n_fits"] == 1
     assert metadata["predicted_hours"] == 0
+
+
+def test_annual_calendar_features_can_be_dropped():
+    series = synthetic_series()
+    full = fm.make_features(series, TEST_HOURS)
+    assert {"month", "doy_sin", "doy_cos"} <= set(full.columns)
+
+    trimmed = fm.make_features(
+        series, TEST_HOURS,
+        feature_options={"drop_annual_calendar": True},
+    )
+    assert not {"month", "doy_sin", "doy_cos"} & set(trimmed.columns)
+    assert {"hour", "dow", "is_weekend", "is_holiday",
+            "semester_in_session"} <= set(trimmed.columns)
+
+
+def test_weather_features_can_be_removed():
+    series = synthetic_series()
+    weather = synthetic_weather(series)
+    full = fm.make_features(series, TEST_HOURS, weather=weather)
+    no_weather = fm.make_features(
+        series, TEST_HOURS, weather=weather,
+        feature_options={"use_weather": False},
+    )
+    assert any(column.startswith("weather_") for column in full.columns)
+    assert not any(column.startswith("weather_") for column in no_weather.columns)
+
+
+def test_oracle_temperature_is_opt_in_and_reads_the_target_hour():
+    series = synthetic_series()
+    weather = synthetic_weather(series)
+    default = fm.make_features(series, TEST_HOURS, weather=weather)
+    assert "oracle_temperature_same_hour" not in default.columns
+
+    options = {"oracle_temperature": True}
+    oracle = fm.make_features(series, TEST_HOURS, weather=weather,
+                              feature_options=options)
+    np.testing.assert_allclose(
+        oracle["oracle_temperature_same_hour"].to_numpy(),
+        weather["temperature_2m"].reindex(TEST_HOURS).to_numpy(),
+    )
+
+    mutated = weather.copy()
+    mutated.loc[TEST_DAY:] = 999.0
+    oracle_mutated = fm.make_features(series, TEST_HOURS, weather=mutated,
+                                      feature_options=options)
+    assert oracle_mutated.loc[
+        TEST_DAY:, "oracle_temperature_same_hour"
+    ].eq(999.0).all()
+
+
+def test_feature_options_reach_fit_metadata():
+    series = synthetic_series()
+    params = {"n_estimators": 10, "max_depth": 2, "n_jobs": 1}
+    _, metadata = fm.fit(
+        series, series.index[0], series.index[20 * 24 - 1], params=params,
+        feature_options={"drop_annual_calendar": True, "use_weather": False},
+    )
+    assert metadata["feature_options"]["drop_annual_calendar"] is True
+    assert metadata["feature_options"]["use_weather"] is False
+    assert "month" not in metadata["features"]
+    assert not any(column.startswith("weather_")
+                   for column in metadata["features"])
