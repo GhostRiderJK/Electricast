@@ -18,6 +18,16 @@ function meanStd(mean, std, digits) {
   return `${mean.toFixed(digits)} ± ${std.toFixed(digits)}`;
 }
 
+function fmtP(value) {
+  if (!Number.isFinite(value)) return "N/A";
+  return value < 0.001 ? value.toExponential(1) : value.toFixed(3);
+}
+
+function fmtSigned(value, digits = 1) {
+  if (!Number.isFinite(value)) return "N/A";
+  return `${value > 0 ? "+" : ""}${value.toFixed(digits)}`;
+}
+
 function BeatsCell({ model }) {
   if (model.is_reference) {
     return <span style={{ color: "#2563eb", fontSize: 11 }}>Reference</span>;
@@ -67,6 +77,7 @@ export default function MetricsPage() {
   const foldById = Object.fromEntries(folds.map(f => [f.id, f]));
   const scoringFolds = folds.filter(f => !f.stress_test);
   const stressFolds = folds.filter(f => f.stress_test);
+  const labelById = Object.fromEntries(models.map(model => [model.key, model.label]));
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
@@ -294,15 +305,99 @@ export default function MetricsPage() {
         </TableShell>
       )}
 
+      {models.length > 0 && (
+        <TableShell
+          title="Day-level test vs best baseline (common hours)"
+          subtitle="Each cell shows Δ = model MAE − best-baseline MAE over the common hours (negative is better), its 95% block-bootstrap CI (2,000 resamples of contiguous 7-day blocks, seed 42), and the paired Wilcoxon signed-rank p-value across days. Δ and the CI are hour-weighted; the Wilcoxon test weights each day equally. p-values are unadjusted. N/A means no test was possible, including the stress test with no common hours."
+        >
+          <table style={{ borderCollapse: "collapse",
+            fontFamily: "'IBM Plex Mono', monospace", fontSize: 11 }}>
+            <thead>
+              <tr style={{ borderBottom: "2px solid #e5e7eb" }}>
+                <th style={{ padding: "8px 10px", textAlign: "left", width: "1%",
+                  fontSize: 10, color: "#4b5563", fontWeight: 700,
+                  textTransform: "uppercase", letterSpacing: 0.5,
+                  whiteSpace: "nowrap" }}>Model</th>
+                {foldOrder.map(id => {
+                  const best = foldById[id]?.common_hours?.best_baseline;
+                  return (
+                    <th key={id} style={{ padding: "8px 12px", textAlign: "right",
+                      fontSize: 10, color: "#4b5563", fontWeight: 700,
+                      textTransform: "uppercase", letterSpacing: 0.5,
+                      whiteSpace: "nowrap" }}>
+                      {foldById[id]?.label || id}
+                      <div style={{ fontSize: 9, color: "#9ca3af", fontWeight: 400,
+                        textTransform: "none", letterSpacing: 0 }}>
+                        {best ? `best: ${labelById[best] || best}` : "best: N/A"}
+                      </div>
+                    </th>
+                  );
+                })}
+              </tr>
+            </thead>
+            <tbody>
+              {models.map(model => (
+                <tr key={model.key} style={{
+                  borderBottom: "1px solid #f3f4f6",
+                  background: model.is_reference ? "#eff6ff" : "transparent",
+                }}>
+                  <td style={{ padding: "10px 12px" }}>{model.label}</td>
+                  {foldOrder.map(id => {
+                    const row = (model.per_fold || []).find(f => f.id === id);
+                    const sig = row?.daily_vs_best;
+                    if (sig?.status === "reference") {
+                      return (
+                        <td key={id} style={{ padding: "10px 12px", textAlign: "right",
+                          fontSize: 10, color: "#2563eb" }}>
+                          Reference
+                        </td>
+                      );
+                    }
+                    if (sig?.status !== "ok") {
+                      return (
+                        <td key={id} style={{ padding: "10px 12px", textAlign: "right",
+                          color: "#9ca3af" }}>
+                          N/A
+                        </td>
+                      );
+                    }
+                    return (
+                      <td key={id} style={{ padding: "10px 12px", textAlign: "right",
+                        lineHeight: 1.5 }}>
+                        <div style={{
+                          color: sig.mae_diff_wh < 0 ? "#15803d" : "#b91c1c",
+                          fontWeight: 700,
+                        }}>
+                          Δ {fmtSigned(sig.mae_diff_wh)} Wh
+                        </div>
+                        <div style={{ fontSize: 9, color: "#4b5563" }}>
+                          [{fmtSigned(sig.ci_low_wh)}, {fmtSigned(sig.ci_high_wh)}]
+                        </div>
+                        <div style={{ fontSize: 9, color: "#6b7280" }}>
+                          p={fmtP(sig.p_value)} · {sig.n_days} d
+                          {sig.small_sample ? " · small" : ""}
+                        </div>
+                      </td>
+                    );
+                  })}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </TableShell>
+      )}
+
       <div style={{ fontSize: 10, color: "#4b5563",
         fontFamily: "'IBM Plex Sans', sans-serif", lineHeight: 1.6 }}>
         Fold means weight each scoring fold equally, not each hour, and exclude the
         2018 stress test. Models with partial coverage have fewer evaluable hours; the
         per-fold n shows the difference. The “beats seasonal naive” column is a
-        descriptive majority rule, not a significance test; paired Wilcoxon results are
-        recorded per fold in the evaluation output. The common-hours table removes the
-        coverage difference entirely, but it uses fewer hours in folds where a model is
-        missing.
+        descriptive majority rule, not a significance test. The common-hours table
+        removes the coverage difference entirely, but it uses fewer hours in folds
+        where a model is missing. The day-level table reports the paired Wilcoxon
+        p-value on daily MAE and the block-bootstrap CI of the common-hours MAE
+        difference; a CI that spans zero or a p-value above 0.05 is not evidence
+        that the model is better.
       </div>
     </div>
   );

@@ -181,9 +181,11 @@ def _build_backtest_summary(results):
             if ok and not is_reference and metrics.get("MAE") is not None \
                     and seasonal_mae is not None:
                 beats = bool(metrics["MAE"] < seasonal_mae)
-            common_metrics = (
-                (fold.get("common_hours") or {}).get("models") or {}
-            ).get(name) or {"status": "no_data", "n": 0}
+            common_block = fold.get("common_hours") or {}
+            common_metrics = (common_block.get("models") or {}).get(name) \
+                or {"status": "no_data", "n": 0}
+            daily_vs_best = (common_block.get("paired_vs_best") or {}).get(name) \
+                or {"status": "no_data"}
             per_fold.append({
                 "id": fold["id"],
                 "status": metrics.get("status", "no_data"),
@@ -200,6 +202,7 @@ def _build_backtest_summary(results):
                         for metric in metric_names
                     },
                 },
+                "daily_vs_best": daily_vs_best,
             })
 
         scored = [row for row in per_fold if row["id"] in scoring_ids]
@@ -252,6 +255,12 @@ def _build_backtest_summary(results):
             "the same hours: the evaluation mask intersected with all seven "
             "models' forecasts; folds where any model has no forecasts have "
             "no common hours and are reported as N/A"
+        ),
+        "significance_rule": (
+            "day-level paired Wilcoxon signed-rank on daily MAE vs the "
+            "common-hours best baseline, with a 95% block-bootstrap CI of the "
+            "MAE difference (2,000 resamples of contiguous 7-day blocks, seed "
+            "42); p-values are unadjusted and small samples are flagged"
         ),
         "fold_order": [fold["id"] for fold in folds],
         "scoring_fold_ids": [fold["id"] for fold in folds if fold["id"] in scoring_ids],

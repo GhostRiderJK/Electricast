@@ -30,6 +30,10 @@ BASELINES = (
 LEARNED_MODELS = ("xgboost", "sarima", "xgboost_quantile")
 ALL_MODELS = BASELINES + LEARNED_MODELS
 
+DAY_BOOTSTRAP_BLOCK_DAYS = 7
+DAY_BOOTSTRAP_REPS = 2000
+DAY_BOOTSTRAP_SEED = 42
+
 # 9.5: one Optuna study on 2016-12-14..2017-05-31, before the first scoring
 # test month, frozen across folds. Copied from tuning_results.json; a test
 # keeps the two in sync.
@@ -111,7 +115,7 @@ PROTOCOL = {
     "evaluation_mask": "target present and seasonal_naive_24 available",
     "mase_scale": "mean absolute 24-h seasonal difference over valid training pairs",
     "best_baseline_selection": "lowest MASE on the all-four-baseline mask when it covers >=50% of evaluation hours (and >=24 h); otherwise on the evaluation mask",
-    "significance": "two-sided Wilcoxon signed-rank on paired absolute errors vs the best baseline; p-values unadjusted; small_sample flags fewer than 10 pairs",
+    "significance": "two-sided Wilcoxon signed-rank on per-day MAE differences vs the fold's common-hours best baseline, plus a 95% block-bootstrap CI of the MAE difference (2,000 resamples of contiguous 7-day blocks, seed 42); p-values unadjusted; small_sample flags fewer than 10 days",
     "learned_models": "xgboost is fit on the fold's training window labels only; its features at target hour t use observations at t-lag with lag >= 24 h, so all features predate the day's 00:00 IST origin; reporting counts and weather are lagged >=24 h; calendar/holiday/semester flags are known in advance; labels clipped at a train-only Q3+3*IQR cap. sarima is refit weekly on the trailing 60 days before each Monday origin and advanced daily only with actuals before the day's origin",
     "sarima": "order (1,0,1)(0,1,1,24); weekly refit on the trailing 60 days of gap-handled target; daily state updates with actuals up to each origin; recovery refit after coverage gaps",
     "quantiles": "xgboost_quantile fits one model per quantile (0.1, 0.5, 0.9) with objective reg:quantileerror on the same features, labels, and cap as xgboost; P10-P90 coverage and pinball loss are reported per fold, and P50 is also scored as a point forecast",
@@ -296,6 +300,132 @@ def paired_significance(actual, pred, baseline_pred):
     return result
 
 
+def _empty_daily_significance(reason):
+    return {
+        "status": "no_data",
+        "method": (
+            "paired Wilcoxon signed-rank on daily MAE with a 95% "
+            "block-bootstrap CI of the MAE difference"
+        ),
+        "n_days": 0,
+        "n_pairs": 0,
+        "mae_diff_wh": None,
+        "median_daily_mae_diff_wh": None,
+        "mean_daily_mae_diff_wh": None,
+        "model_better": None,
+        "small_sample": True,
+        "statistic": None,
+        "p_value": None,
+        "significant_at_0.05": None,
+        "ci_level": 0.95,
+        "ci_low_wh": None,
+        "ci_high_wh": None,
+        "bootstrap_reps": DAY_BOOTSTRAP_REPS,
+        "block_days": DAY_BOOTSTRAP_BLOCK_DAYS,
+        "bootstrap_seed": DAY_BOOTSTRAP_SEED,
+        "n_blocks": 0,
+        "prob_model_better": None,
+        "reason": reason,
+    }
+
+
+def daily_significance(actual, pred, baseline_pred):
+    """Day-level paired Wilcoxon and a 7-day block-bootstrap CI.
+
+    Hourly errors are aggregated to a mean absolute error per IST day, using
+    only hours where the actual, model and baseline all exist. The Wilcoxon
+    test is run on the per-day MAE differences. The CI resamples contiguous
+    seven-day blocks with replacement and recomputes the hour-weighted MAE
+    difference, so within-week correlation is preserved.
+    """
+    frame = pd.concat(
+        [
+            pd.Series(actual).rename("actual"),
+            pd.Series(pred).rename("pred"),
+            pd.Series(baseline_pred).rename("baseline"),
+        ],
+        axis=1,
+    ).dropna()
+    if frame.empty:
+        return _empty_daily_significance("no paired hours")
+
+    frame["model_ae"] = (frame["pred"] - frame["actual"]).abs()
+    frame["baseline_ae"] = (frame["baseline"] - frame["actual"]).abs()
+    days = frame.index.floor("D")
+    daily = frame.groupby(days).agg(
+        model_mae=("model_ae", "mean"),
+        baseline_mae=("baseline_ae", "mean"),
+        n=("model_ae", "size"),
+    )
+    diff = daily["model_mae"] - daily["baseline_mae"]
+    n_days = int(len(daily))
+
+    result = _empty_daily_significance(None)
+    result.update({
+        "status": "ok",
+        "n_days": n_days,
+        "n_pairs": int(len(frame)),
+        "mae_diff_wh": _clean(
+            float(frame["model_ae"].mean() - frame["baseline_ae"].mean()), 4
+        ),
+        "median_daily_mae_diff_wh": _clean(float(diff.median()), 4),
+        "mean_daily_mae_diff_wh": _clean(float(diff.mean()), 4),
+        "model_better": bool(diff.median() < 0) if diff.median() != 0 else None,
+        "small_sample": bool(n_days < 10),
+    })
+
+    if bool((diff == 0).all()):
+        result["reason"] = "all daily differences are zero"
+    else:
+        try:
+            statistic, p_value = wilcoxon(
+                diff.to_numpy(dtype=float),
+                zero_method="wilcox",
+                alternative="two-sided",
+            )
+            result["statistic"] = _clean(statistic, 4)
+            result["p_value"] = float(p_value) if np.isfinite(p_value) else None
+            result["significant_at_0.05"] = (
+                bool(result["p_value"] < 0.05)
+                if result["p_value"] is not None else None
+            )
+        except ValueError as exc:
+            result["reason"] = str(exc)
+
+    first_day = daily.index.min()
+    offsets = ((daily.index - first_day) / pd.Timedelta(days=1)).astype(int)
+    block_ids = offsets // DAY_BOOTSTRAP_BLOCK_DAYS
+    blocks = [
+        np.flatnonzero(block_ids == block_id)
+        for block_id in np.unique(block_ids)
+    ]
+    result["n_blocks"] = len(blocks)
+    if len(blocks) < 2:
+        result["reason"] = (
+            result["reason"] or "fewer than two day blocks for a bootstrap CI"
+        )
+        return result
+
+    model_mae = daily["model_mae"].to_numpy(dtype=float)
+    baseline_mae = daily["baseline_mae"].to_numpy(dtype=float)
+    weights = daily["n"].to_numpy(dtype=float)
+    rng = np.random.default_rng(DAY_BOOTSTRAP_SEED)
+    boot = np.empty(DAY_BOOTSTRAP_REPS, dtype=float)
+    for rep in range(DAY_BOOTSTRAP_REPS):
+        pick = rng.integers(0, len(blocks), size=len(blocks))
+        index = np.concatenate([blocks[block] for block in pick])
+        w = weights[index]
+        boot[rep] = (
+            np.average(model_mae[index], weights=w)
+            - np.average(baseline_mae[index], weights=w)
+        )
+    low, high = np.percentile(boot, [2.5, 97.5])
+    result["ci_low_wh"] = _clean(float(low), 4)
+    result["ci_high_wh"] = _clean(float(high), 4)
+    result["prob_model_better"] = _clean(float((boot < 0).mean()), 4)
+    return result
+
+
 def select_best_baseline(actual, preds, eval_mask, scale):
     """Pick the baseline with the lowest MASE on a common mask.
 
@@ -346,6 +476,22 @@ def common_hours_block(actual, preds, eval_mask, scale):
     n = int(common.sum())
     eval_hours = int(eval_mask.sum())
 
+    paired = {}
+    for name in ALL_MODELS:
+        if best is None:
+            paired[name] = _empty_daily_significance(
+                "no common-hours best baseline"
+            )
+        elif name == best:
+            paired[name] = {
+                "status": "reference",
+                "reason": f"{name} is the common-hours best baseline",
+            }
+        else:
+            paired[name] = daily_significance(
+                actual[common], preds[name][common], preds[best][common]
+            )
+
     return {
         "definition": (
             "evaluation mask intersected with the forecasts of all four "
@@ -362,6 +508,7 @@ def common_hours_block(actual, preds, eval_mask, scale):
             "by": "MASE",
             "metrics": selection_metrics,
         },
+        "paired_vs_best": paired,
         "hours_by_model": {
             name: int(preds[name][eval_mask].notna().sum())
             for name in ALL_MODELS
@@ -461,17 +608,6 @@ def evaluate_fold(series, fold, reporting=None, weather_frame=None):
         actual, preds, mask, scale
     )
     common = common_hours_block(actual, preds, mask, scale)
-    paired = {}
-    for name in models:
-        if name == best:
-            continue
-        paired[name] = paired_significance(
-            actual[mask], preds[name][mask], preds[best][mask]
-        ) if best else {
-            "n_pairs": 0, "median_abs_error_diff_wh": None, "model_better": None,
-            "small_sample": True, "statistic": None, "p_value": None,
-            "significant_at_0.05": None, "reason": "no best baseline",
-        }
 
     return {
         "id": fold["id"],
@@ -504,7 +640,6 @@ def evaluate_fold(series, fold, reporting=None, weather_frame=None):
             "by": "MASE",
             "metrics": selection_metrics,
         },
-        "paired_vs_best": paired,
     }
 
 
@@ -627,10 +762,16 @@ def main():
         selection = fold["selection"]
         print(f"best baseline: {fold['best_baseline']} "
               f"({selection['mask']}, {selection['hours']} h, by {selection['by']})")
-        for name, comp in fold["paired_vs_best"].items():
+        for name, comp in common["paired_vs_best"].items():
+            if comp["status"] != "ok":
+                print(f"  {name:28s} {comp['status']}: "
+                      f"{comp['reason'] or 'reference'}")
+                continue
             p_value = comp["p_value"] if comp["p_value"] is not None else comp["reason"]
-            print(f"  {name:28s} n={comp['n_pairs']:5d} "
-                  f"median_diff={_show(comp['median_abs_error_diff_wh'])} Wh "
+            print(f"  {name:28s} days={comp['n_days']:3d} "
+                  f"mae_diff={_show(comp['mae_diff_wh'])} Wh "
+                  f"median_daily_diff={_show(comp['median_daily_mae_diff_wh'])} Wh "
+                  f"CI95=[{_show(comp['ci_low_wh'])}, {_show(comp['ci_high_wh'])}] "
                   f"p={p_value}")
 
 

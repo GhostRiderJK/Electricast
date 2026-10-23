@@ -171,3 +171,40 @@ def test_common_hours_block_reports_empty_intersection():
     assert block["best_baseline"] is None
     assert block["missing_models"] == ["mean_last_4_same_weekdays"]
     assert block["models"]["xgboost"]["status"] == "no_data"
+
+
+def test_daily_significance_uses_days_and_block_bootstrap():
+    index = pd.date_range("2021-01-01", periods=10 * 24, freq="h", tz=ev.dp.TZ)
+    actual = pd.Series(0.0, index=index)
+    pred = pd.Series(1.0, index=index)
+    baseline = pd.Series(2.0, index=index)
+
+    result = ev.daily_significance(actual, pred, baseline)
+
+    assert result["status"] == "ok"
+    assert result["n_days"] == 10
+    assert result["n_pairs"] == 240
+    assert result["mae_diff_wh"] == -1.0
+    assert result["median_daily_mae_diff_wh"] == -1.0
+    assert result["mean_daily_mae_diff_wh"] == -1.0
+    assert result["model_better"] is True
+    assert result["ci_low_wh"] == -1.0
+    assert result["ci_high_wh"] == -1.0
+    assert result["prob_model_better"] == 1.0
+    assert result["n_blocks"] == 2
+    assert result["p_value"] < 0.05
+    assert result["small_sample"] is False
+
+
+def test_daily_significance_reports_no_data_without_overlap():
+    index = pd.date_range("2021-01-01", periods=24, freq="h", tz=ev.dp.TZ)
+    result = ev.daily_significance(
+        pd.Series(1.0, index=index),
+        pd.Series(np.nan, index=index),
+        pd.Series(2.0, index=index),
+    )
+    assert result["status"] == "no_data"
+    assert result["n_days"] == 0
+    assert result["mae_diff_wh"] is None
+    assert result["p_value"] is None
+    assert result["reason"] == "no paired hours"

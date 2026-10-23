@@ -47,6 +47,20 @@ def _fold(fold_id, start, end, mae, stress=False, label=None):
                 "seasonal_naive_24": _metrics(mae + 2, n=12),
                 "xgboost": _metrics(mae + 1, n=12),
             },
+            "paired_vs_best": {
+                "seasonal_naive_24": {"status": "reference"},
+                "xgboost": {
+                    "status": "ok",
+                    "n_days": 12,
+                    "n_pairs": 288,
+                    "median_daily_mae_diff_wh": -1.0,
+                    "ci_low_wh": -2.0,
+                    "ci_high_wh": 0.1,
+                    "p_value": 0.04,
+                    "significant_at_0.05": True,
+                    "small_sample": False,
+                },
+            },
         },
     }
 
@@ -100,6 +114,8 @@ def test_summary_exposes_common_hours():
     }
     assert xgb["per_fold"][0]["common"]["n"] == 12
     assert xgb["per_fold"][0]["common"]["MAE"] == 11.0
+    assert xgb["per_fold"][0]["daily_vs_best"]["n_days"] == 12
+    assert xgb["per_fold"][0]["daily_vs_best"]["ci_low_wh"] == -2.0
     assert xgb["per_fold"][1]["common"]["status"] == "ok"
     assert "common-hours" in summary["common_hours_rule"]
 
@@ -113,3 +129,4 @@ def test_summary_common_hours_default_to_no_data():
     assert summary["folds"][0]["common_hours"]["n"] == 0
     assert xgb["per_fold"][0]["common"]["status"] == "no_data"
     assert xgb["per_fold"][0]["common"]["MAE"] is None
+    assert xgb["per_fold"][0]["daily_vs_best"]["status"] == "no_data"

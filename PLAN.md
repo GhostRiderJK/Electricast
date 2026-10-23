@@ -69,6 +69,6 @@ Rules: one task per iteration. Tick [x] only after the VERIFY step passes.
 - [x] 9.4 Level-normalized target: forecast target / trailing 7-day mean, multiply back; add lag-24 near-zero stable-apartment fraction; compare with 9.3 winner
 - [x] 9.5 Tune once on the largest training window with time-series CV, freeze parameters across folds; report whether tuning helps
 - [x] 9.6 Common-hours table: every model on intersected forecast hours (including SARIMA), per fold, beside existing per-model tables
-- [ ] 9.7 Replace hourly Wilcoxon with day-level test: daily MAE, paired day Wilcoxon + block-bootstrap CI vs best baseline; update RESULTS.md and Metrics page
+- [x] 9.7 Replace hourly Wilcoxon with day-level test: daily MAE, paired day Wilcoxon + block-bootstrap CI vs best baseline; update RESULTS.md and Metrics page
 - [ ] 9.8 Conformal P10–P90 calibration from past residuals (rolling prior-day window); coverage before/after per fold
 - [ ] 9.9 Update RESULTS.md, README, Limitations page, FINAL_REPORT.md and assistant with new numbers; state plainly if no learned model beats the best baseline on common hours
