@@ -68,3 +68,9 @@ One entry per iteration: date, item id, change, evidence, numbers.
 - `MetricsBar` is now a compact single-line card per model (inline R²/RMSE/MAE/sMAPE, description moved to the card `title`); only `status === "ok"` models render and the loading skeleton shrank from 160px to 52px.
 - `index.css` adds `min-width: 0` to grid children (chart canvases can no longer widen their track) and a print stylesheet that hides header/footer/buttons, removes shadows/padding, and prevents cards breaking across pages.
 - Evidence: production build passed (44 modules, CSS 0.92 kB); built CSS contains one `@media print` block; live page at :3100 measured each metric card at 48px high (previously 160px) with SARIMA −1.3261 red and XGBoost 0.8238 green; `main` scrollWidth 600 = viewport 599 with no overflowing descendants; screenshot confirms compact two-card bar above Dataset Overview.
+
+## 2026-10-23 — 1.9 PredictionsPage render state and real day picker
+
+- Removed the render-time `setSelectedMonth(...)`; the effective month is now `selectedMonth ?? testMonths[0]`, and the hourly fetch keys off that derived value.
+- Day options come from the test-period `predDaily.labels` for the selected month (Jul/Aug/Oct/Dec 31, Sep/Nov 30) instead of a fixed 28; if the previous day does not exist in the new month, it clamps to the last available day.
+- Evidence: production build passed (44 modules, 1.44s); live at :3100 — Jul options 1–31 default 15; selecting 31 then Sep gives options 1–30 and value 30; network logged `hourly?month=Jul&day=15`, `Jul&day=31`, `Sep&day=30`; `/api/predictions/hourly?month=Sep&day=30` returned 24 hours dated `Sep 30, 2017`; Vite dev build showed only the standard React DevTools message, no state-update-in-render warning.

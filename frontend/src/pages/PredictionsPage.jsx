@@ -69,21 +69,32 @@ export default function PredictionsPage() {
 
   const { data: predMonthly } = useData(api.predMonthly);
   const { data: predDaily }   = useData(api.predDaily, []);
-  const { data: predHourly }  = useData(() => selectedMonth ? api.predHourly(selectedMonth, selectedDay) : Promise.resolve(null), [selectedMonth, selectedDay]);
   const { data: errData }     = useData(api.predMonthlyErrors);
   const { data: stats }       = useData(api.statistics);
+
+  // Derive the selected month/day instead of writing state during render.
+  const testMonths = predMonthly?.months || [];
+  const effectiveMonth = selectedMonth ?? testMonths[0] ?? null;
+  const dayOptions = effectiveMonth && predDaily
+    ? predDaily.labels
+        .filter(l => l.startsWith(`${effectiveMonth} `))
+        .map(l => Number(l.slice(4, 6)))
+        .filter(Number.isFinite)
+    : [];
+  const effectiveDay = dayOptions.includes(selectedDay)
+    ? selectedDay
+    : (dayOptions[dayOptions.length - 1] ?? selectedDay);
+
+  const { data: predHourly } = useData(
+    () => effectiveMonth ? api.predHourly(effectiveMonth, effectiveDay) : Promise.resolve(null),
+    [effectiveMonth, effectiveDay]
+  );
 
   const splitLabel = stats
     ? `${(stats.train_hours / (stats.train_hours + stats.test_hours) * 100).toFixed(1)}% / ` +
       `${(stats.test_hours / (stats.train_hours + stats.test_hours) * 100).toFixed(1)}% ` +
       `(${stats.train_hours.toLocaleString()} / ${stats.test_hours.toLocaleString()} h)`
     : "loading…";
-
-  // Derive available test months from monthly predictions
-  const testMonths = predMonthly?.months || [];
-  if (selectedMonth === null && testMonths.length > 0) {
-    setSelectedMonth(testMonths[0]);
-  }
 
   const toggle = (key) => setVisibleModels(p => ({ ...p, [key]: !p[key] }));
 
@@ -183,17 +194,18 @@ export default function PredictionsPage() {
                 <button key={m} onClick={() => setSelectedMonth(m)} style={{
                   padding: "4px 12px", borderRadius: 6, cursor: "pointer",
                   border: "1.5px solid",
-                  borderColor: selectedMonth === m ? "#2563eb" : "#e5e7eb",
-                  background: selectedMonth === m ? "#eff6ff" : "#fff",
-                  color: selectedMonth === m ? "#2563eb" : "#6b7280",
+                  borderColor: effectiveMonth === m ? "#2563eb" : "#e5e7eb",
+                  background: effectiveMonth === m ? "#eff6ff" : "#fff",
+                  color: effectiveMonth === m ? "#2563eb" : "#6b7280",
                   fontFamily: "'IBM Plex Mono', monospace", fontSize: 11, fontWeight: 600,
                 }}>{m}</button>
               ))}
-              <select value={selectedDay} onChange={e => setSelectedDay(Number(e.target.value))}
+              <select value={effectiveDay} onChange={e => setSelectedDay(Number(e.target.value))}
+                disabled={dayOptions.length === 0}
                 style={{ padding: "4px 10px", borderRadius: 6,
                   border: "1.5px solid #e5e7eb", fontFamily: "'IBM Plex Mono', monospace",
                   fontSize: 11, color: "#374151", cursor: "pointer", background: "#fff" }}>
-                {Array.from({length: 28}, (_, i) => i + 1).map(d => (
+                {dayOptions.map(d => (
                   <option key={d} value={d}>Day {d}</option>
                 ))}
               </select>

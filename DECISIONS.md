@@ -14,3 +14,4 @@ One line per ambiguous choice; the more conservative option wins.
 - 1.4: `/api/eda/yearly` returns daily means by default and falls back to the legacy sampled `eda.yearly` series if an older results file is loaded.
 - 1.5: The split label shows percentages computed from `statistics.train_hours`/`test_hours` plus the raw hour counts, so the label is auditable; it renders "loading…" until statistics arrive rather than guessing.
 - 1.7: R² uses a green threshold of 0.8 and red only for negative values; 0–0.8 stays neutral because no documented target exists, and coloring a merely modest score red would overstate failure.
+- 1.9: The selected month/day are derived from fetched data (`selectedMonth ?? first test month`, day list from `predDaily` labels) instead of writing state during render; switching to a shorter month clamps an out-of-range day to that month's last available day.
