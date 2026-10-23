@@ -25,7 +25,7 @@ Rules: one task per iteration. Tick [x] only after the VERIFY step passes.
 - [x] 2.4 Target = mean load per reporting apartment; build stable panel (>90% coverage)
 - [x] 2.5 Gaps: interpolate only <=6h; longer gaps flagged and excluded from train and eval
 - [x] 2.6 Outlier cap fitted on train only
-- [ ] 2.7 Flag suspect_inactive apartments (December mean <100 Wh/h)
+- [x] 2.7 Flag suspect_inactive apartments (December mean <100 Wh/h)
 - [ ] 2.8 Write data_quality.json and a Data Quality page
 
 ## Phase 3 — Evaluation (backend/evaluate.py)

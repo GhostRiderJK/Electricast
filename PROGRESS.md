@@ -114,4 +114,10 @@ One entry per iteration: date, item id, change, evidence, numbers.
 - Added `fit_outlier_cap()` (Q3 + 3×IQR, minimum 100 samples) and `apply_outlier_cap()`, which clips only the upper tail and reports how many values were capped; the fitter accepts only the training slice by design.
 - Evidence: with a provisional train slice of valid hours before 2017-10-01 (5,543 h), cap = 1,006.72 Wh; full-data cap would have been 1,070.31 Wh. Four hours exceed the cap (max 2,001.12 Wh on 2017-02-05 11:00 IST) and are clipped to 1,006.72; NaNs preserved. Mutating all post-October values to 1e6 leaves the train-fitted cap unchanged.
 
+## 2026-10-23 — 2.7 Suspect-inactive apartments
+
+- Added `apartment_activity()`, which computes each apartment's mean load and reading count for an IST month and flags `suspect_inactive` when the mean is <100 Wh/h with at least 24 readings.
+- Evidence: using December 2017 (38/39 apartments reporting; data ends 2017-12-28), 21 apartments are flagged, including 13 of the 24 stable apartments; apartment 13 has no December data and is not flagged, and apartment 11 at 100.50 Wh/h is just above the boundary. Synthetic check confirms 99.9 flagged, 100.0/100.1 not, and a single-reading apartment not flagged.
+
+
 

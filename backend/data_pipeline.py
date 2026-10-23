@@ -151,6 +151,37 @@ def apply_outlier_cap(series, cap):
     return capped, n_capped
 
 
+INACTIVE_MONTH = "2017-12"
+INACTIVE_MAX_MEAN_WH = 100.0
+INACTIVE_MIN_HOURS = 24
+
+
+def apartment_activity(panel, month=INACTIVE_MONTH,
+                       threshold=INACTIVE_MAX_MEAN_WH,
+                       min_hours=INACTIVE_MIN_HOURS):
+    """Per-apartment mean load and inactivity flag for one IST month.
+
+    Apartments with fewer than min_hours readings in the month are not flagged
+    (insufficient evidence); apartments with no readings get NaN mean.
+    """
+    start = pd.Timestamp(f"{month}-01", tz=TZ)
+    end = start + pd.DateOffset(months=1)
+    index = pd.date_range(start, end, freq="h", tz=TZ, inclusive="left")
+    sub = panel.reindex(index)
+    stats = pd.DataFrame({
+        "mean_wh": sub.mean(),
+        "hours": sub.notna().sum().astype(int),
+    })
+    stats.index.name = "apartment"
+    stats["suspect_inactive"] = (
+        (stats["hours"] >= min_hours)
+        & stats["mean_wh"].notna()
+        & (stats["mean_wh"] < threshold)
+    )
+    return stats.sort_values("mean_wh")
+
+
+
 def load_apartments(data_dir=DATA_DIR):
     """Load every CSV in data_dir and return (apartments, report).
 
