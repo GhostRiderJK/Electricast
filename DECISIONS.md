@@ -10,3 +10,5 @@ One line per ambiguous choice; the more conservative option wins.
 - 1.1: The upload CSV input column name `Energy Consumption (kWh)` is left unchanged because it is the schema of the provided dataset; its numeric values are still treated as Wh downstream (pre-existing behavior, revisited in Phase 6).
 - 1.2: Model availability is expressed by a backend `status` field (`ok` / `disabled`); the stored LSTM placeholder rows remain in `model_results.json` but every metrics UI path filters on `status === "ok"`.
 - 1.2: BEST ties are marked on all tied models; if no active model has a finite metric, the value renders as N/A and no badge is shown.
+- 1.4: Daily means were derived from the raw CSVs with the existing 2017 cleaning pipeline and written into `model_results.json` as `eda.yearly_daily`; no model was retrained and all existing metrics/prediction arrays were verified byte-identical after the JSON update.
+- 1.4: `/api/eda/yearly` returns daily means by default and falls back to the legacy sampled `eda.yearly` series if an older results file is loaded.

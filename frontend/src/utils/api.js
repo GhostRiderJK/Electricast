@@ -12,7 +12,7 @@ export const api = {
   edaHourly:          ()          => get("/api/eda/hourly"),
   edaDaily:           ()          => get("/api/eda/daily"),
   edaMonthly:         ()          => get("/api/eda/monthly"),
-  edaYearly:          ()          => get("/api/eda/yearly?downsample=24"),
+  edaYearly:          ()          => get("/api/eda/yearly"),
   edaHeatmap:         ()          => get("/api/eda/heatmap"),
   edaWeekdayWeekend:  ()          => get("/api/eda/weekday_vs_weekend"),
   predMonthly:        ()          => get("/api/predictions/monthly"),

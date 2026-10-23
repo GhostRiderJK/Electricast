@@ -151,15 +151,15 @@ export default function EDAPage() {
       {/* Yearly trend */}
       <div>
         <SectionHeader title="Yearly Load Trend"
-          sub="Full hourly electricity consumption trend (Wh)" />
+          sub="Daily mean electricity consumption trend (Wh)" />
         <ChartCard height={220}>
           {yearly && (
             <Line
               data={{
-                labels: yearly.labels.filter((_, i) => i % 3 === 0),
+                labels: yearly.labels,
                 datasets: [{
-                  label: "Hourly Load (Wh)",
-                  data: yearly.actual.filter((_, i) => i % 3 === 0),
+                  label: "Daily Mean Load (Wh)",
+                  data: yearly.actual,
                   borderColor: COLORS.actual.line,
                   backgroundColor: "rgba(26,26,46,0.06)",
                   borderWidth: 1.2,

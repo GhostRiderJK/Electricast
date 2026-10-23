@@ -38,3 +38,10 @@ One entry per iteration: date, item id, change, evidence, numbers.
 
 - Removed the LSTM dataset from the selected-day profile, switched the all-days overlay and the weekday Actual-vs-model bars to XGBoost, and retitled both charts.
 - Evidence: `grep -n "lstm\|LSTM" WeeklyPage.jsx` → no hits; `npm run build` passed (44 modules, 1.56s); live browser at :3000 on Weekly Pattern rendered `MON — AVERAGE 24H LOAD PROFILE (WH)`, `ALL DAYS OVERLAY — XGBOOST PREDICTIONS (WH)`, `AVERAGE DAILY LOAD BY WEEKDAY — ACTUAL VS XGBOOST (WH)` with no LSTM text.
+
+## 2026-10-23 — 1.4 Yearly trend is daily means
+
+- Derived 365 daily means from `data/*.csv` using the existing 2017 pipeline (UTC→IST, hourly sum, mean+3σ cap, zero→NaN linear interpolation, median fill) and added `eda.yearly_daily` to `model_results.json`. No retraining; existing `metrics`/`predictions`/other EDA structures verified identical to HEAD.
+- `/api/eda/yearly` now returns `yearly_daily` with no downsample parameter; `train_models.py` emits the same structure for future runs; frontend fetches `/api/eda/yearly` and plots all 365 labels/values (removed `i % 3` and `downsample=24`).
+- Numbers: 365 points, first `2017-01-01 = 4909.8 Wh`, last `2017-12-31 = 664.5 Wh`; daily mean 7108.82 Wh equals hourly mean 7108.82 Wh.
+- Evidence: TestClient `/api/eda/yearly` → 200, 365 points, no `HH:MM` labels; `grep -rn "i % 3\|downsample"` → none; `npm run build` passed (44 modules, 1.63s); live browser showed `Yearly Load Trend` / `Daily mean electricity consumption trend (Wh)`.

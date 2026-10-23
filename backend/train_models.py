@@ -133,6 +133,12 @@ def compute_eda(df):
         "std": [round(float(mg.std()[m]), 1) for m in avail],
     }
 
+    daily_trend = W.resample("D").mean()
+    yearly_daily = {
+        "labels": [d.strftime("%Y-%m-%d") for d in daily_trend.index],
+        "actual": [round(float(v), 1) for v in daily_trend.values],
+    }
+
     step = max(1, len(df) // 500)
     yearly_trend = {
         "labels": [d.strftime("%Y-%m-%d %H:00") for d in df.index[::step]],
@@ -195,6 +201,7 @@ def compute_eda(df):
         "daily": daily_profile,
         "monthly": monthly_profile,
         "yearly": yearly_trend,
+        "yearly_daily": yearly_daily,
         "heatmap": heatmap,
         "weekday_weekend": weekday_weekend,
         "statistics": statistics,

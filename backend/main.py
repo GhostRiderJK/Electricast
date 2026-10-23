@@ -103,16 +103,11 @@ def eda_monthly():
 
 
 @app.get("/api/eda/yearly")
-def eda_yearly(downsample: int = Query(default=1, ge=1, le=168)):
+def eda_yearly():
     if not DATA:
         return _no_data()
-    yt = DATA["eda"]["yearly"]
-    if downsample > 1:
-        return {
-            "labels": yt["labels"][::downsample],
-            "actual": yt["actual"][::downsample],
-        }
-    return yt
+    eda = DATA["eda"]
+    return eda.get("yearly_daily", eda["yearly"])
 
 
 @app.get("/api/eda/heatmap")
