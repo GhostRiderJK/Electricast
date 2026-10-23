@@ -246,3 +246,12 @@ One entry per iteration: date, item id, change, evidence, numbers.
 - Fixed during verification: pandas 3 string dtype made `dtype == object` false, so naive datetime columns were not suggested as timestamps (now uses `not is_numeric_dtype`); negative rows were double-counted in the dropped-row total (now computed as raw − used); a React warning from mixing `border` and `borderColor` was removed; zero-shot training was made feature-consistent with inference by dropping campus-only reporting features.
 - Verification: live backend on 127.0.0.1:8014 and Vite on :3013; fresh page console showed only Vite/React dev messages; `npm run build` passed (48 modules, 398.66 kB); `python -m pytest backend/tests -q` → 17 passed.
 - 6.1, 6.2, and 6.3 share one module, one endpoint set, and one page, so they are committed together; the split is recorded in DECISIONS.md.
+
+## 2026-10-23 — 7.1 Test suite: metrics, split, leakage, gaps
+
+- Added `test_metrics.py`: a fully hand-computed four-pair case (MAE 2.75, RMSE 2.8723, WAPE 11.0, sMAPE 12.1896, bias −0.25, R² 0.934, MASE 1.375), zero-denominator guards (WAPE/R² null, sMAPE 0), missing-pair handling, no-data responses, 24-h MASE scale, and day-ahead persistence/seasonal-naive lags.
+- Added `test_gaps.py`: a 3-h interior gap interpolates to 12.5 / 15 / 17.5 and is flagged imputed; a 7-h gap and both edge runs stay missing and are flagged excluded; configured limits are honored; run lengths/edges/timestamps are reported.
+- Added `test_split.py`: a 40-day synthetic series splits 576 train / 384 test hours at 2020-01-25 00:00 IST with a contiguous train end; an off-midnight start is floored to the day; a 10-day series returns the explicit 336-hour reason with no model or split payload. The upload model trainers are stubbed, so these tests exercise the split without training.
+- Added `test_upload_validation.py`: regression for pandas 3 string dtypes (naive datetime columns must still be suggested as timestamps), epoch/unit suggestions, agreement of naive UTC / embedded-offset / epoch timestamps in IST, energy-sum vs power-mean aggregation with a per-hour series mean, and single counting of invalid vs negative rows.
+- The new timestamp-offset regex has no capture group, removing the pandas match-group warning seen on every upload parse.
+- Evidence: `python -m pytest backend/tests -q` → 34 passed in 15.19 s (was 17). The suite uses synthetic series only and does not read campus artifacts, the network, or the data directory.

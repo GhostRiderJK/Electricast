@@ -314,7 +314,7 @@ def _parse_timestamps(values, mode, timezone):
     else:
         text = values.astype(str)
         has_offset = bool(
-            text.str.contains(r"(Z|[+-]\d{2}:?\d{2})$", regex=True, na=False).mean() > 0.5
+            text.str.contains(r"(?:Z|[+-]\d{2}:?\d{2})$", regex=True, na=False).mean() > 0.5
         )
         if has_offset:
             parsed = pd.to_datetime(text, errors="coerce", utc=True, format="mixed")

@@ -55,6 +55,6 @@ Rules: one task per iteration. Tick [x] only after the VERIFY step passes.
 - [x] 6.3 Streaming size check, .CSV accepted, progress/error states, results download
 
 ## Phase 7 — Engineering
-- [ ] 7.1 pytest suite: metrics, split, leakage, gaps
+- [x] 7.1 pytest suite: metrics, split, leakage, gaps
 - [ ] 7.2 Makefile; Docker fixes (models/ copied, no-curl healthcheck, same-origin API)
 - [ ] 7.3 README, RESULTS.md, refreshed copilot-instructions.md
