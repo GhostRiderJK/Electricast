@@ -65,6 +65,8 @@ export default function MetricsPage() {
   const folds = data.folds || [];
   const foldOrder = data.fold_order || folds.map(f => f.id);
   const foldById = Object.fromEntries(folds.map(f => [f.id, f]));
+  const scoringFolds = folds.filter(f => !f.stress_test);
+  const stressFolds = folds.filter(f => f.stress_test);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
@@ -73,7 +75,8 @@ export default function MetricsPage() {
         borderRadius: 12, padding: "18px 22px" }}>
         <div style={{ fontSize: 14, fontWeight: 700, color: "#111827",
           fontFamily: "'IBM Plex Mono', monospace" }}>
-          Four-fold day-ahead backtest
+          {scoringFolds.length}-fold day-ahead backtest
+          {stressFolds.length > 0 ? " + stress test" : ""}
         </div>
         {data.protocol && (
           <div style={{ display: "grid",
@@ -94,11 +97,13 @@ export default function MetricsPage() {
           {folds.map(fold => (
             <span key={fold.id} style={{
               fontSize: 10, fontFamily: "'IBM Plex Mono', monospace",
-              color: "#374151", background: "#f9fafb",
-              border: "1px solid #e5e7eb", borderRadius: 20,
-              padding: "3px 10px",
+              color: fold.stress_test ? "#92400e" : "#374151",
+              background: fold.stress_test ? "#fffbeb" : "#f9fafb",
+              border: `1px solid ${fold.stress_test ? "#fcd34d" : "#e5e7eb"}`,
+              borderRadius: 20, padding: "3px 10px",
             }}>
               {fold.label} · {fold.eval_hours.toLocaleString()} h · {fold.eval_days} d
+              {fold.stress_test ? " · excluded from means" : ""}
             </span>
           ))}
         </div>
@@ -115,7 +120,7 @@ export default function MetricsPage() {
       {models.length > 0 && (
         <TableShell
           title="Fold mean ± std by model"
-          subtitle={`Mean and sample standard deviation across folds with results. “Beats seasonal naive” means ${data.beats_rule}.`}
+          subtitle={`Mean and sample standard deviation across the ${scoringFolds.length} scoring folds with results. ${stressFolds.length > 0 ? "The stress test is excluded. " : ""}“Beats seasonal naive” means ${data.beats_rule}.`}
         >
           <table style={{ borderCollapse: "collapse",
             fontFamily: "'IBM Plex Mono', monospace", fontSize: 12 }}>
@@ -178,7 +183,7 @@ export default function MetricsPage() {
       {models.length > 0 && (
         <TableShell
           title="MAE by fold"
-          subtitle="Each cell shows MAE in Wh and the number of evaluable hours (n) in that fold."
+          subtitle={`Each cell shows MAE in Wh and the number of evaluable hours (n) in that fold.${stressFolds.length > 0 ? " The stress test is shown for context only and is not part of any fold mean." : ""}`}
         >
           <table style={{ borderCollapse: "collapse",
             fontFamily: "'IBM Plex Mono', monospace", fontSize: 12 }}>
@@ -230,10 +235,11 @@ export default function MetricsPage() {
 
       <div style={{ fontSize: 10, color: "#4b5563",
         fontFamily: "'IBM Plex Sans', sans-serif", lineHeight: 1.6 }}>
-        Fold means weight each fold equally, not each hour. Models with partial coverage
-        have fewer evaluable hours; the per-fold n shows the difference. The “beats
-        seasonal naive” column is a descriptive majority rule, not a significance test;
-        paired Wilcoxon results are recorded per fold in the evaluation output.
+        Fold means weight each scoring fold equally, not each hour, and exclude the
+        2018 stress test. Models with partial coverage have fewer evaluable hours; the
+        per-fold n shows the difference. The “beats seasonal naive” column is a
+        descriptive majority rule, not a significance test; paired Wilcoxon results are
+        recorded per fold in the evaluation output.
       </div>
     </div>
   );

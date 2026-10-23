@@ -283,7 +283,7 @@ export default function PredictionsPage() {
       {errors && (
         <>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: 14 }}>
-            <Card title="MAE by hour of day" sub="Pooled across all four folds; each model uses its available hours" height={250}>
+            <Card title="MAE by hour of day" sub="Pooled across all evaluated folds, including the 2018 stress test; each model uses its available hours" height={250}>
               <Bar
                 data={{
                   labels: errors.by_hour.map(row => `${String(row.hour).padStart(2, "0")}:00`),
@@ -292,7 +292,7 @@ export default function PredictionsPage() {
                 options={{ ...opts, scales: { ...opts.scales, y: yAxis } }}
               />
             </Card>
-            <Card title="MAE by calendar month" sub="Months present in the four test folds" height={250}>
+            <Card title="MAE by calendar month" sub="Months present in all evaluated folds, including the 2018 stress test" height={250}>
               <Bar
                 data={{
                   labels: errors.by_month.map(row => row.label),

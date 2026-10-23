@@ -562,3 +562,52 @@ def test_provider_error_on_empty_gemini_answer(tools, monkeypatch):
     )
     with pytest.raises(ProviderError):
         service._gemini_chat("system", "user", 1.0)
+
+
+def _stress_fold():
+    return {
+        "id": "2018-05_06",
+        "label": "Stress test (May\u2013Jun 2018)",
+        "stress_test": True,
+        "test": {
+            "start": "2018-05-01 00:00", "end": "2018-05-02 23:00",
+            "eval_hours": 48, "eval_days": 2,
+        },
+        "models": {
+            "seasonal_naive_24": _model(48, 100.0),
+            "xgboost": _model(48, 500.0),
+            "sarima": _model(48, 400.0),
+            "xgboost_quantile": _model(48, 450.0),
+        },
+        "hourly": {
+            "columns": COLUMNS,
+            "rows": _hourly_rows(5, 500.0, {
+                "seasonal_naive": 100, "xgboost": 500, "p50": 450,
+            }, sarima=False),
+        },
+    }
+
+
+def test_fold_means_exclude_stress_test():
+    results, quality = build_artifacts()
+    results["folds"].append(_stress_fold())
+    tools = ChatTools(results, quality)
+
+    overview = tools.model_metrics()
+    by_key = {row["key"]: row for row in overview["models"]}
+    xgb = by_key["xgboost"]
+
+    assert xgb["mean"]["MAE"] == 10.2083
+    assert xgb["n_folds"] == 2
+
+    per_fold = tools.model_metrics(model="xgboost")["model"]["per_fold"]
+    assert per_fold[-1]["stress_test"] is True
+    assert per_fold[-1]["label"].startswith("Stress test")
+    assert overview["scoring_fold_ids"] == ["2017-07", "2017-08"]
+    assert overview["stress_test_fold_ids"] == ["2018-05_06"]
+    assert overview["best_model"]["eval_hours"] == 96
+    assert overview["best_model"]["key"] == "sarima"
+
+    fold = tools.model_metrics(fold="2018-05_06")["fold"]
+    assert fold["stress_test"] is True
+    assert fold["label"].startswith("Stress test")

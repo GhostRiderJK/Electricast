@@ -114,36 +114,37 @@ def _verify_tool_sources(tools, results, quality):
         else:
             derived[label] = expected
 
-    folds = results["folds"]
-    sarima_maes = [
-        fold["models"]["sarima"]["MAE"]
-        for fold in folds
-        if (fold.get("models") or {}).get("sarima", {}).get("status") == "ok"
-    ]
-    sarima_hours = sum(
-        fold["models"]["sarima"].get("n", 0)
-        for fold in folds
-        if (fold.get("models") or {}).get("sarima", {}).get("status") == "ok"
-    )
-    p50_maes = [
-        fold["models"]["xgboost_quantile"]["MAE"]
-        for fold in folds
-        if (fold.get("models") or {}).get("xgboost_quantile", {}).get("status") == "ok"
-    ]
+    folds = [fold for fold in results["folds"] if not fold.get("stress_test")]
+
+    def _fold_mae(key):
+        values = [
+            (fold.get("models") or {}).get(key, {}).get("MAE")
+            for fold in folds
+        ]
+        values = [value for value in values if value is not None]
+        return round(sum(values) / len(values), 4) if values else None
+
+    def _fold_hours(key):
+        return sum(
+            (fold.get("models") or {}).get(key, {}).get("n", 0)
+            for fold in folds
+            if (fold.get("models") or {}).get(key, {}).get("status") == "ok"
+        )
+
     eval_hours = sum(fold["test"]["eval_hours"] for fold in folds)
 
     overview = tools.model_metrics()
     best = overview["best_model"]
     runner = best["runner_up"]
-    check("best_sarima_mae", best["fold_mean_MAE_wh"],
-          round(sum(sarima_maes) / len(sarima_maes), 4))
-    check("best_sarima_hours", best["n_total_hours"], sarima_hours)
+    check("best_fold_mean_mae", best["fold_mean_MAE_wh"], _fold_mae(best["key"]))
+    check("best_model_hours", best["n_total_hours"], _fold_hours(best["key"]))
     check("best_eval_hours", best["eval_hours"], eval_hours)
-    check("runner_p50_mae", runner["fold_mean_MAE_wh"],
-          round(sum(p50_maes) / len(p50_maes), 4))
+    check("runner_fold_mean_mae", runner["fold_mean_MAE_wh"],
+          _fold_mae(runner["key"]))
     check("best_gap", best["gap_to_runner_up_wh"],
           round(runner["fold_mean_MAE_wh"] - best["fold_mean_MAE_wh"], 4),
           tolerance=1e-4)
+    check("scoring_fold_count", len(overview["scoring_fold_ids"]), len(folds))
 
     records = list(_hourly_records(results))
     december = [record for record in records

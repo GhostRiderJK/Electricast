@@ -137,6 +137,10 @@ def _matches_any(text: str, patterns) -> bool:
     return any(re.search(pattern, text) for pattern in patterns)
 
 
+def _fold_display(fold) -> str:
+    return (fold or {}).get("label") or _fold_label((fold or {}).get("test"))
+
+
 def _fold_label(test) -> str:
     start = str((test or {}).get("start", ""))[:10]
     end = str((test or {}).get("end", ""))[:10]
@@ -246,11 +250,18 @@ class ChatTools:
         self.folds = list(self.results.get("folds") or [])
         self.fold_ids = {fold.get("id") for fold in self.folds}
         self.fold_labels = {
-            fold.get("id"): _fold_label(fold.get("test")) for fold in self.folds
+            fold.get("id"): _fold_display(fold) for fold in self.folds
         }
+        self.scoring_folds = [
+            fold for fold in self.folds if not fold.get("stress_test")
+        ]
+        self.scoring_fold_ids = [fold.get("id") for fold in self.scoring_folds]
+        self.stress_fold_ids = [
+            fold.get("id") for fold in self.folds if fold.get("stress_test")
+        ]
         self.eval_hours_total = sum(
             int((fold.get("test") or {}).get("eval_hours") or 0)
-            for fold in self.folds
+            for fold in self.scoring_folds
         )
         self._records_by_fold = {}
         self._all_records = []
@@ -306,7 +317,8 @@ class ChatTools:
                     beats = bool(metrics["MAE"] < seasonal_mae)
                 per_fold.append({
                     "id": fold.get("id"),
-                    "label": _fold_label(fold.get("test")),
+                    "label": _fold_display(fold),
+                    "stress_test": bool(fold.get("stress_test")),
                     "status": metrics.get("status", "no_data"),
                     "n": metrics.get("n", 0),
                     **{metric: metrics.get(metric) for metric in SUMMARY_METRICS},
@@ -314,21 +326,22 @@ class ChatTools:
                     "seasonal_naive_MAE": seasonal_mae,
                 })
 
+            scored = [row for row in per_fold if not row["stress_test"]]
             stats = {
                 metric: _mean_std([
-                    row[metric] for row in per_fold if row["status"] == "ok"
+                    row[metric] for row in scored if row["status"] == "ok"
                 ])
                 for metric in SUMMARY_METRICS
             }
             comparable = [
-                row for row in per_fold
+                row for row in scored
                 if row["status"] == "ok" and row["seasonal_naive_MAE"] is not None
             ]
             folds_beaten = sum(
                 1 for row in comparable if row["beats_seasonal_naive"] is True
             )
             n_total = sum(
-                int(row["n"] or 0) for row in per_fold if row["status"] == "ok"
+                int(row["n"] or 0) for row in scored if row["status"] == "ok"
             )
             summaries.append({
                 "key": name,
@@ -374,7 +387,7 @@ class ChatTools:
         block = {
             "key": best["key"],
             "label": best["label"],
-            "metric": "unweighted mean of per-fold MAE, in Wh",
+            "metric": "unweighted mean of per-fold MAE over the scoring folds, in Wh",
             "fold_mean_MAE_wh": best["mean"]["MAE"],
             "n_total_hours": best["n_total_hours"],
             "eval_hours": best["eval_hours"],
@@ -386,10 +399,12 @@ class ChatTools:
             "seasonal_naive_MAE_wh": seasonal_mae,
             "gap_to_seasonal_naive_wh": None,
             "note": (
-                f"{best['label']} has the lowest unweighted fold-mean MAE. "
-                f"It is scored on {best['n_total_hours']} of "
-                f"{best['eval_hours']} evaluation hours, so models with "
-                f"different coverage are not directly interchangeable."
+                f"{best['label']} has the lowest unweighted fold-mean MAE "
+                f"over the scoring folds. It is scored on "
+                f"{best['n_total_hours']} of {best['eval_hours']} scoring-fold "
+                f"evaluation hours, so models with different coverage are not "
+                f"directly interchangeable. The 2018 stress test is excluded "
+                f"from the mean and this coverage count."
             ),
         }
         if runner is not None:
@@ -477,6 +492,7 @@ class ChatTools:
                 "fold": {
                     "id": fold_id,
                     "label": self.fold_labels.get(fold_id),
+                    "stress_test": bool(fold_row.get("stress_test")),
                     "test_start": test.get("start"),
                     "test_end": test.get("end"),
                     "eval_hours": test.get("eval_hours"),
@@ -514,9 +530,13 @@ class ChatTools:
             "models": [self._summary_row(row, include_per_fold=False)
                        for row in self._summary],
             "best_model": self._best_block(),
+            "scoring_fold_ids": list(self.scoring_fold_ids),
+            "stress_test_fold_ids": list(self.stress_fold_ids),
             "coverage_note": (
                 f"Each model is scored only on its own forecast hours. "
-                f"Total evaluation hours across folds: {self.eval_hours_total}."
+                f"Total evaluation hours across the scoring folds: "
+                f"{self.eval_hours_total}. The 2018 stress test is excluded "
+                f"from the mean and from this total."
             ),
             "units": "MAE, RMSE and bias in Wh; WAPE, MASE and sMAPE in percent; R2 unitless.",
         }
@@ -976,7 +996,8 @@ class ChatTools:
                 "apartments": (quality.get("panel") or {}).get("apartments"),
             },
             "caveats": [
-                "This is a retrospective four-fold backtest, not a live deployment.",
+                f"This is a retrospective {len(self.scoring_folds)}-fold backtest "
+                "plus a 2018 stress test, not a live deployment.",
                 "No model estimates causal effects of policy, tariffs, or appliance changes.",
                 "The target is one IIT Bombay residential site; results are not evidence for other sites.",
                 "Models are scored only on hours with a forecast; missing hours are not imputed.",

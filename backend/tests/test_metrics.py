@@ -78,3 +78,25 @@ def test_baselines_follow_day_ahead_lags():
         preds["seasonal_naive_24"].to_numpy(),
         series.reindex(hours - pd.Timedelta(hours=24)).to_numpy(),
     )
+
+
+def test_phase9_fold_layout_and_stress_test_flag():
+    ids = [fold["id"] for fold in ev.FOLDS]
+    assert ids == [
+        "2017-06", "2017-07", "2017-08", "2017-09_11", "2017-12",
+        "2018-05_06",
+    ]
+    stress = [fold for fold in ev.FOLDS if fold.get("stress_test")]
+    assert [fold["id"] for fold in stress] == ["2018-05_06"]
+    assert stress[0]["label"].lower().startswith("stress test")
+    assert all(not fold.get("stress_test") for fold in ev.FOLDS[:-1])
+    assert ev.FOLDS[3]["test_end"] == "2017-11-30 23:00"
+    assert ev.FOLDS[4]["test_start"] == "2017-12-01 00:00"
+
+
+def test_history_start_is_the_first_valid_target_hour():
+    index = pd.date_range("2020-01-01", periods=4, freq="h", tz="Asia/Kolkata")
+    series = pd.Series([np.nan, 1.0, 2.0, 3.0], index=index)
+    assert ev.history_start(series) == "2020-01-01 01:00"
+    with np.testing.assert_raises(ValueError):
+        ev.history_start(pd.Series([np.nan], index=index))

@@ -80,7 +80,7 @@ BACKTEST_LABELS = {
 def load_results():
     global DATA
     if os.path.exists(RESULTS_PATH):
-        with open(RESULTS_PATH, "r") as f:
+        with open(RESULTS_PATH, "r", encoding="utf-8") as f:
             DATA = json.load(f)
         for name, model_metrics in DATA.get("metrics", {}).items():
             model_metrics.setdefault("status", MODEL_STATUS.get(name, "ok"))
@@ -95,7 +95,7 @@ load_results()
 def load_quality():
     global QUALITY
     if os.path.exists(QUALITY_PATH):
-        with open(QUALITY_PATH, "r") as f:
+        with open(QUALITY_PATH, "r", encoding="utf-8") as f:
             QUALITY = json.load(f)
         print(f"Loaded data quality report from {QUALITY_PATH}")
     else:
@@ -113,6 +113,10 @@ def _fold_label(test):
     if start.year == end.year:
         return f"{start.strftime('%b')}\u2013{end.strftime('%b %Y')}"
     return f"{start.strftime('%b %Y')}\u2013{end.strftime('%b %Y')}"
+
+
+def _fold_display(fold):
+    return fold.get("label") or _fold_label(fold["test"])
 
 
 def _mean_std(values):
@@ -139,14 +143,19 @@ def _build_backtest_summary(results):
     fold_meta = [
         {
             "id": fold["id"],
-            "label": _fold_label(fold["test"]),
+            "label": _fold_display(fold),
             "test_start": fold["test"]["start"],
             "test_end": fold["test"]["end"],
             "eval_hours": fold["test"]["eval_hours"],
             "eval_days": fold["test"]["eval_days"],
+            "stress_test": bool(fold.get("stress_test")),
         }
         for fold in folds
     ]
+    scoring_ids = {
+        fold["id"] for fold in folds if not fold.get("stress_test")
+    }
+    stress_ids = [fold["id"] for fold in folds if fold.get("stress_test")]
 
     model_summaries = []
     for name in model_names:
@@ -165,19 +174,21 @@ def _build_backtest_summary(results):
                 "id": fold["id"],
                 "status": metrics.get("status", "no_data"),
                 "n": metrics.get("n", 0),
+                "stress_test": bool(fold.get("stress_test")),
                 **{metric: metrics.get(metric) for metric in metric_names},
                 "beats_seasonal_naive": beats,
                 "seasonal_naive_MAE": seasonal_mae,
             })
 
+        scored = [row for row in per_fold if row["id"] in scoring_ids]
         stats = {
             metric: _mean_std([
-                row[metric] for row in per_fold if row["status"] == "ok"
+                row[metric] for row in scored if row["status"] == "ok"
             ])
             for metric in metric_names
         }
         comparable = [
-            row for row in per_fold
+            row for row in scored
             if row["status"] == "ok" and row["seasonal_naive_MAE"] is not None
         ]
         folds_beaten = sum(
@@ -206,10 +217,17 @@ def _build_backtest_summary(results):
         "generated_at": results.get("generated_at"),
         "protocol": results.get("protocol"),
         "beats_rule": (
-            "lower MAE than seasonal naive in a majority of the folds where "
-            "both models have data"
+            "lower MAE than seasonal naive in a majority of the five scoring "
+            "folds; the 2018 stress test is excluded"
+        ),
+        "means_rule": (
+            "fold means, standard deviations, coverage and beats counts use "
+            "the five scoring folds only; the stress test is shown per fold "
+            "but never aggregated"
         ),
         "fold_order": [fold["id"] for fold in folds],
+        "scoring_fold_ids": [fold["id"] for fold in folds if fold["id"] in scoring_ids],
+        "stress_test_fold_ids": stress_ids,
         "folds": fold_meta,
         "models": model_summaries,
     }
@@ -267,9 +285,10 @@ def _build_backtest_dashboard(results):
     fold_meta = [
         {
             "id": fold["id"],
-            "label": _fold_label(fold["test"]),
+            "label": _fold_display(fold),
             "test_start": fold["test"]["start"],
             "test_end": fold["test"]["end"],
+            "stress_test": bool(fold.get("stress_test")),
         }
         for fold in results["folds"]
     ]
@@ -361,7 +380,7 @@ def load_backtest():
     global BACKTEST_RESULTS, BACKTEST_SUMMARY, BACKTEST_DAYS, BACKTEST_DAY_INDEX
     global BACKTEST_ERRORS
     if os.path.exists(BACKTEST_PATH):
-        with open(BACKTEST_PATH, "r") as f:
+        with open(BACKTEST_PATH, "r", encoding="utf-8") as f:
             results = json.load(f)
         BACKTEST_RESULTS = results
         BACKTEST_SUMMARY = _build_backtest_summary(results)
@@ -474,7 +493,8 @@ def get_explain_importance():
         importance = fit.get("importance") or {}
         folds.append({
             "id": fold["id"],
-            "label": _fold_label(fold["test"]),
+            "label": _fold_display(fold),
+            "stress_test": bool(fold.get("stress_test")),
             "method": importance.get("method"),
             "features": importance.get("features", []),
         })
@@ -607,7 +627,8 @@ def _build_limitations():
         fit = (fold.get("model_fit") or {}).get("xgboost") or {}
         fold_rows.append({
             "id": fold["id"],
-            "label": _fold_label(fold["test"]),
+            "label": _fold_display(fold),
+            "stress_test": bool(fold.get("stress_test")),
             "test_start": fold["test"]["start"],
             "test_end": fold["test"]["end"],
             "eval_hours": fold["test"]["eval_hours"],
@@ -618,6 +639,8 @@ def _build_limitations():
             "interval_n": interval.get("n"),
         })
 
+    scoring_rows = [row for row in fold_rows if not row["stress_test"]]
+    stress_rows = [row for row in fold_rows if row["stress_test"]]
     eval_hours = sum(row["eval_hours"] for row in fold_rows)
     eval_days = sum(row["eval_days"] for row in fold_rows)
     sarima_hours = sum(row["sarima_hours"] for row in fold_rows)
@@ -706,10 +729,14 @@ def _build_limitations():
             "items": [
                 {
                     "label": "Expanding folds",
-                    "value": f"{len(fold_rows)} folds · {eval_hours:,} h",
+                    "value": (
+                        f"{len(scoring_rows)} scoring"
+                        + (f" + {len(stress_rows)} stress" if stress_rows else "")
+                        + f" · {eval_hours:,} h"
+                    ),
                     "detail": (
                         f"{' · '.join(row['label'] for row in fold_rows)}; {eval_days} evaluated "
-                        f"days in total."
+                        f"days in total. Fold means exclude the stress test."
                     ),
                     "severity": "info",
                 },
@@ -874,8 +901,9 @@ def _build_limitations():
         {
             "title": "Statistical caution",
             "detail": (
-                "Fold means are unweighted, paired tests are unadjusted, and small samples are "
-                "flagged. A 3–4 fold mean is not a confidence interval."
+                "Fold means are unweighted across the scoring folds and exclude the 2018 "
+                "stress test; paired tests are unadjusted and small samples are flagged. "
+                f"A {len(scoring_rows)}-fold mean is not a confidence interval."
             ),
         },
     ]

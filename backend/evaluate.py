@@ -44,6 +44,12 @@ LEARNED_MODEL_DESCRIPTIONS = {
 
 FOLDS = (
     {
+        "id": "2017-06",
+        "train_end": "2017-05-31 23:00",
+        "test_start": "2017-06-01 00:00",
+        "test_end": "2017-06-30 23:00",
+    },
+    {
         "id": "2017-07",
         "train_end": "2017-06-30 23:00",
         "test_start": "2017-07-01 00:00",
@@ -56,9 +62,15 @@ FOLDS = (
         "test_end": "2017-08-31 23:00",
     },
     {
-        "id": "2017-09_12",
+        "id": "2017-09_11",
         "train_end": "2017-08-31 23:00",
         "test_start": "2017-09-01 00:00",
+        "test_end": "2017-11-30 23:00",
+    },
+    {
+        "id": "2017-12",
+        "train_end": "2017-11-30 23:00",
+        "test_start": "2017-12-01 00:00",
         "test_end": "2017-12-31 23:00",
     },
     {
@@ -66,6 +78,8 @@ FOLDS = (
         "train_end": "2017-12-31 23:00",
         "test_start": "2018-05-01 00:00",
         "test_end": "2018-06-04 23:00",
+        "stress_test": True,
+        "label": "Stress test (May\u2013Jun 2018)",
     },
 )
 
@@ -75,7 +89,7 @@ PROTOCOL = {
     "forecast": "24 hourly values for every test day",
     "origin": "00:00 IST of the test day",
     "information_set": "target observations strictly before the origin; lag baselines use >=24 h lags",
-    "folds": "expanding window with train_start fixed at the earliest valid target hour (2016-12-14 21:00 IST); one fold tests Sep-Dec 2017 and one tests May-Jun 2018",
+    "folds": "expanding window with train_start fixed at the earliest valid target hour (2016-12-14 21:00 IST); five scoring folds test Jun, Jul, Aug, Sep-Nov and Dec 2017; May-Jun 2018 is a stress test excluded from every fold mean",
     "evaluation_mask": "target present and seasonal_naive_24 available",
     "mase_scale": "mean absolute 24-h seasonal difference over valid training pairs",
     "best_baseline_selection": "lowest MASE on the all-four-baseline mask when it covers >=50% of evaluation hours (and >=24 h); otherwise on the evaluation mask",
@@ -386,6 +400,8 @@ def evaluate_fold(series, fold, reporting=None, weather_frame=None):
 
     return {
         "id": fold["id"],
+        "label": fold.get("label"),
+        "stress_test": bool(fold.get("stress_test")),
         "train": {
             "start": fold["train_start"],
             "end": fold["train_end"],
