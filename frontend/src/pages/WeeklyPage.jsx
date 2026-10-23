@@ -15,7 +15,6 @@ const DAYS = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
 
 const MODEL_COLORS = {
   actual:  "#111827",
-  lstm:    "#2563eb",
   sarima:  "#dc2626",
   xgboost: "#16a34a",
 };
@@ -33,7 +32,7 @@ export default function WeeklyPage() {
     ? DAYS.map(d => ({
         day: d,
         actual: weeklyData[d] ? Math.round(weeklyData[d].actual.reduce((a,b)=>a+b,0)/24) : 0,
-        lstm:   weeklyData[d] ? Math.round(weeklyData[d].lstm.reduce((a,b)=>a+b,0)/24)   : 0,
+        xgboost: weeklyData[d] ? Math.round(weeklyData[d].xgboost.reduce((a,b)=>a+b,0)/24) : 0,
       }))
     : [];
 
@@ -75,7 +74,7 @@ export default function WeeklyPage() {
         <div style={{ fontSize: 11, fontWeight: 700, color: "#374151",
           fontFamily: "'IBM Plex Mono', monospace",
           textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 14 }}>
-          {selectedDay} — Average 24h Load Profile
+          {selectedDay} — Average 24h Load Profile (Wh)
         </div>
         <div style={{ height: 280 }}>
           {dayData && (
@@ -89,12 +88,6 @@ export default function WeeklyPage() {
                     borderColor: MODEL_COLORS.actual,
                     backgroundColor: "rgba(17,24,39,0.07)",
                     fill: true, tension: 0.4, pointRadius: 2, borderWidth: 2.2,
-                  },
-                  {
-                    label: "LSTM",
-                    data: dayData.lstm,
-                    borderColor: MODEL_COLORS.lstm,
-                    borderDash: [6, 3], tension: 0.4, pointRadius: 0, borderWidth: 1.8,
                   },
                   {
                     label: "SARIMA",
@@ -122,7 +115,7 @@ export default function WeeklyPage() {
         <div style={{ fontSize: 11, fontWeight: 700, color: "#374151",
           fontFamily: "'IBM Plex Mono', monospace",
           textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 14 }}>
-          All Days Overlay — LSTM Predictions (Wh)
+          All Days Overlay — XGBoost Predictions (Wh)
         </div>
         <div style={{ height: 250 }}>
           {weeklyData && (
@@ -135,7 +128,7 @@ export default function WeeklyPage() {
                   const hue = [220, 200, 170, 140, 110, 0, 20][i];
                   return {
                     label: d,
-                    data: weeklyData[d]?.lstm || [],
+                    data: weeklyData[d]?.xgboost || [],
                     borderColor: isSelected
                       ? (isWe ? "#dc2626" : "#2563eb")
                       : `hsla(${hue}, 60%, 50%, 0.45)`,
@@ -157,7 +150,7 @@ export default function WeeklyPage() {
         <div style={{ fontSize: 11, fontWeight: 700, color: "#374151",
           fontFamily: "'IBM Plex Mono', monospace",
           textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 14 }}>
-          Average Daily Load by Weekday — Actual vs LSTM (Wh)
+          Average Daily Load by Weekday — Actual vs XGBoost (Wh)
         </div>
         <div style={{ height: 220 }}>
           {dayAvgs.length > 0 && (
@@ -176,9 +169,9 @@ export default function WeeklyPage() {
                     borderRadius: 5,
                   },
                   {
-                    label: "LSTM",
-                    data: dayAvgs.map(d => d.lstm),
-                    backgroundColor: "rgba(37,99,235,0.65)",
+                    label: "XGBoost",
+                    data: dayAvgs.map(d => d.xgboost),
+                    backgroundColor: "rgba(22,163,74,0.65)",
                     borderRadius: 5,
                   }
                 ]

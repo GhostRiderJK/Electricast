@@ -33,3 +33,8 @@ One entry per iteration: date, item id, change, evidence, numbers.
 - Backend: `load_results()` injects `status` (`lstm=disabled`, `sarima/xgboost=ok`) into `/api/metrics`; `train_models.py` writes the same statuses for future regenerations.
 - Frontend: MetricsBar and MetricsPage show only `status === "ok"` models; BEST values are computed over active models only; non-finite values render N/A; ties mark all tied models. Static LSTM header badge/footer text removed.
 - Evidence: TestClient `/api/metrics` → `lstm: status=disabled ... sarima: status=ok ... xgboost: status=ok`; `npm run build` passed (44 modules, 2.00s); live browser at :3000 showed MetricsBar with only SARIMA and XGBoost, Metrics page had no LSTM text and exactly 4 BEST badges, all won by XGBoost (R² 0.8238, RMSE 1968.7, MAE 1461.2, sMAPE 40.33).
+
+## 2026-10-23 — 1.3 WeeklyPage uses XGBoost
+
+- Removed the LSTM dataset from the selected-day profile, switched the all-days overlay and the weekday Actual-vs-model bars to XGBoost, and retitled both charts.
+- Evidence: `grep -n "lstm\|LSTM" WeeklyPage.jsx` → no hits; `npm run build` passed (44 modules, 1.56s); live browser at :3000 on Weekly Pattern rendered `MON — AVERAGE 24H LOAD PROFILE (WH)`, `ALL DAYS OVERLAY — XGBOOST PREDICTIONS (WH)`, `AVERAGE DAILY LOAD BY WEEKDAY — ACTUAL VS XGBOOST (WH)` with no LSTM text.
