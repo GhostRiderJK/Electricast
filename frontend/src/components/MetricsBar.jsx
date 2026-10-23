@@ -3,22 +3,27 @@ import { api } from "../utils/api";
 import DataError from "./DataError";
 
 const MODEL_CONFIG = {
-  sarima:  { label: "SARIMA",  accent: "#b91c1c", bg: "#fef2f2", icon: "⌇" },
-  xgboost: { label: "XGBoost", accent: "#15803d", bg: "#f0fdf4", icon: "⬢" },
+  sarima:           { label: "SARIMA",       accent: "#b91c1c", bg: "#fef2f2", icon: "⌇" },
+  xgboost:          { label: "XGBoost",      accent: "#15803d", bg: "#f0fdf4", icon: "⬢" },
+  xgboost_quantile: { label: "Quantile P50", accent: "#b45309", bg: "#fffbeb", icon: "◧" },
 };
 
-function MetricCard({ model, metrics }) {
-  const cfg = MODEL_CONFIG[model];
-  if (!cfg || !metrics) return null;
+const fmt = (value, digits, suffix = "") =>
+  Number.isFinite(value) ? `${value.toFixed(digits)}${suffix}` : "N/A";
+
+function MetricCard({ model }) {
+  const cfg = MODEL_CONFIG[model.key];
+  if (!cfg || !model.mean) return null;
+  const { mean, std } = model;
   const items = [
-    { k: "R²",    v: metrics.R2.toFixed(4),     good: metrics.R2 >= 0.8 ? true : metrics.R2 < 0 ? false : null },
-    { k: "RMSE",  v: `${metrics.RMSE.toFixed(0)} Wh`, good: null },
-    { k: "MAE",   v: `${metrics.MAE.toFixed(0)} Wh`,  good: null },
-    { k: "sMAPE", v: `${metrics.sMAPE.toFixed(2)}%`,  good: metrics.sMAPE < 15 },
+    { k: "R²",    v: fmt(mean.R2, 4),        good: mean.R2 >= 0.8 ? true : mean.R2 < 0 ? false : null },
+    { k: "RMSE",  v: fmt(mean.RMSE, 0, " Wh"), good: null },
+    { k: "MAE",   v: fmt(mean.MAE, 0, " Wh"),  good: null },
+    { k: "sMAPE", v: fmt(mean.sMAPE, 2, "%"),  good: mean.sMAPE < 15 },
   ];
 
   return (
-    <div title={metrics.description} style={{
+    <div title={model.description} style={{
       flex: "1 1 380px", minWidth: 0,
       display: "flex", alignItems: "center", gap: 12,
       background: "#fff",
@@ -40,7 +45,9 @@ function MetricCard({ model, metrics }) {
         <div style={{
           fontSize: 9, color: "#4b5563", fontFamily: "'IBM Plex Sans', sans-serif",
           whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
-        }}>{metrics.period}</div>
+        }}>
+          {model.n_folds}-fold mean{Number.isFinite(std?.MAE) ? ` · MAE σ ${std.MAE.toFixed(0)} Wh` : ""}
+        </div>
       </div>
       <div style={{ display: "flex", gap: 16, marginLeft: "auto", flexShrink: 0 }}>
         {items.map(({ k, v, good }) => (
@@ -62,7 +69,7 @@ function MetricCard({ model, metrics }) {
 }
 
 export default function MetricsBar() {
-  const { data, loading, error } = useData(api.metrics);
+  const { data, loading, error } = useData(api.backtestSummary);
 
   if (loading) return (
     <div style={{ display: "flex", gap: 10 }}>
@@ -75,16 +82,14 @@ export default function MetricsBar() {
     </div>
   );
 
-  if (error) return <DataError error={error} label="model metrics" />;
+  if (error) return <DataError error={error} label="backtest results" />;
 
-  const active = ["sarima", "xgboost"].filter(
-    model => data?.[model]?.status === "ok"
-  );
+  const active = (data?.models || []).filter(model => model.kind === "learned");
 
   return (
     <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
       {active.map(model => (
-        <MetricCard key={model} model={model} metrics={data?.[model] ?? null} />
+        <MetricCard key={model.key} model={model} />
       ))}
     </div>
   );

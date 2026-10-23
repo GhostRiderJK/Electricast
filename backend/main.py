@@ -33,15 +33,27 @@ app.add_middleware(
 # ─────────────────────────────────────────────────────────────────
 
 RESULTS_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "model_results.json")
+BACKTEST_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "results.json")
 QUALITY_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data_quality.json")
 
 DATA = None
 QUALITY = None
+BACKTEST_SUMMARY = None
 
 MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
                "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
 
 MODEL_STATUS = {"lstm": "disabled", "sarima": "ok", "xgboost": "ok"}
+
+BACKTEST_LABELS = {
+    "persistence": "Persistence",
+    "seasonal_naive_24": "Seasonal naive 24h",
+    "same_hour_last_week": "Same hour last week",
+    "mean_last_4_same_weekdays": "Mean of 4 weekdays",
+    "xgboost": "XGBoost",
+    "sarima": "SARIMA",
+    "xgboost_quantile": "Quantile XGBoost (P50)",
+}
 
 
 def load_results():
@@ -72,6 +84,130 @@ def load_quality():
 load_quality()
 
 
+def _fold_label(test):
+    start = pd.Timestamp(test["start"])
+    end = pd.Timestamp(test["end"])
+    if (start.year, start.month) == (end.year, end.month):
+        return start.strftime("%b %Y")
+    if start.year == end.year:
+        return f"{start.strftime('%b')}\u2013{end.strftime('%b %Y')}"
+    return f"{start.strftime('%b %Y')}\u2013{end.strftime('%b %Y')}"
+
+
+def _mean_std(values):
+    vals = [
+        float(v) for v in values
+        if v is not None and np.isfinite(v)
+    ]
+    if not vals:
+        return {"mean": None, "std": None, "n": 0}
+    std = float(np.std(vals, ddof=1)) if len(vals) > 1 else 0.0
+    return {"mean": round(float(np.mean(vals)), 4),
+            "std": round(std, 4), "n": len(vals)}
+
+
+def _build_backtest_summary(results):
+    folds = results["folds"]
+    metric_names = ("MAE", "RMSE", "WAPE", "MASE", "R2", "sMAPE", "bias")
+    model_names = list(folds[0]["models"])
+    descriptions = {}
+    descriptions.update(results.get("baseline_descriptions", {}))
+    descriptions.update(results.get("learned_model_descriptions", {}))
+    baselines = set(results.get("baselines", []))
+
+    fold_meta = [
+        {
+            "id": fold["id"],
+            "label": _fold_label(fold["test"]),
+            "test_start": fold["test"]["start"],
+            "test_end": fold["test"]["end"],
+            "eval_hours": fold["test"]["eval_hours"],
+            "eval_days": fold["test"]["eval_days"],
+        }
+        for fold in folds
+    ]
+
+    model_summaries = []
+    for name in model_names:
+        is_reference = name == "seasonal_naive_24"
+        per_fold = []
+        for fold in folds:
+            metrics = fold["models"].get(name) or {"status": "no_data", "n": 0}
+            seasonal = fold["models"].get("seasonal_naive_24") or {}
+            ok = metrics.get("status") == "ok"
+            seasonal_mae = seasonal.get("MAE") if seasonal.get("status") == "ok" else None
+            beats = None
+            if ok and not is_reference and metrics.get("MAE") is not None \
+                    and seasonal_mae is not None:
+                beats = bool(metrics["MAE"] < seasonal_mae)
+            per_fold.append({
+                "id": fold["id"],
+                "status": metrics.get("status", "no_data"),
+                "n": metrics.get("n", 0),
+                **{metric: metrics.get(metric) for metric in metric_names},
+                "beats_seasonal_naive": beats,
+                "seasonal_naive_MAE": seasonal_mae,
+            })
+
+        stats = {
+            metric: _mean_std([
+                row[metric] for row in per_fold if row["status"] == "ok"
+            ])
+            for metric in metric_names
+        }
+        comparable = [
+            row for row in per_fold
+            if row["status"] == "ok" and row["seasonal_naive_MAE"] is not None
+        ]
+        folds_beaten = sum(
+            1 for row in comparable if row["beats_seasonal_naive"] is True
+        )
+        beats_naive = None if is_reference else (
+            folds_beaten > len(comparable) / 2 if comparable else None
+        )
+
+        model_summaries.append({
+            "key": name,
+            "label": BACKTEST_LABELS.get(name, name),
+            "kind": "baseline" if name in baselines else "learned",
+            "description": descriptions.get(name, ""),
+            "is_reference": is_reference,
+            "mean": {metric: stats[metric]["mean"] for metric in metric_names},
+            "std": {metric: stats[metric]["std"] for metric in metric_names},
+            "n_folds": stats["MAE"]["n"],
+            "folds_beaten": folds_beaten,
+            "comparable_folds": len(comparable),
+            "beats_seasonal_naive": beats_naive,
+            "per_fold": per_fold,
+        })
+
+    return {
+        "generated_at": results.get("generated_at"),
+        "protocol": results.get("protocol"),
+        "beats_rule": (
+            "lower MAE than seasonal naive in a majority of the folds where "
+            "both models have data"
+        ),
+        "fold_order": [fold["id"] for fold in folds],
+        "folds": fold_meta,
+        "models": model_summaries,
+    }
+
+
+def load_backtest():
+    global BACKTEST_SUMMARY
+    if os.path.exists(BACKTEST_PATH):
+        with open(BACKTEST_PATH, "r") as f:
+            results = json.load(f)
+        BACKTEST_SUMMARY = _build_backtest_summary(results)
+        print(f"Loaded backtest summary from {BACKTEST_PATH}")
+    else:
+        print(f"{BACKTEST_PATH} not found. Run: python evaluate.py")
+
+
+load_backtest()
+
+
 def _no_data():
     return JSONResponse(
         status_code=503,
@@ -94,6 +230,16 @@ def get_metrics():
     if not DATA:
         return _no_data()
     return DATA["metrics"]
+
+
+@app.get("/api/backtest/summary")
+def get_backtest_summary():
+    if not BACKTEST_SUMMARY:
+        return JSONResponse(
+            status_code=503,
+            content={"error": "Backtest results not available. Run evaluate.py first."},
+        )
+    return BACKTEST_SUMMARY
 
 
 @app.get("/api/data_quality")
