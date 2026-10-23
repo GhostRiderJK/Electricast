@@ -7,6 +7,7 @@ import { Line, Bar } from "react-chartjs-2";
 import { useData } from "../hooks/useData";
 import { api } from "../utils/api";
 import { baseChartOptions } from "../utils/chartConfig";
+import DataError from "../components/DataError";
 
 Chart.register(CategoryScale, LinearScale, PointElement, LineElement,
   BarElement, Title, Tooltip, Legend, Filler);
@@ -14,10 +15,10 @@ Chart.register(CategoryScale, LinearScale, PointElement, LineElement,
 const ALL_MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 
 const MODEL_COLORS = {
-  actual:  { border: "#111827", bg: "rgba(17,24,39,0.07)",   label: "Actual" },
-  lstm:    { border: "#2563eb", bg: "rgba(37,99,235,0.08)",  label: "LSTM" },
-  sarima:  { border: "#dc2626", bg: "rgba(220,38,38,0.07)",  label: "SARIMA" },
-  xgboost: { border: "#16a34a", bg: "rgba(22,163,74,0.07)",  label: "XGBoost" },
+  actual:  { border: "#111827", bg: "rgba(17,24,39,0.07)",   text: "#111827", label: "Actual" },
+  lstm:    { border: "#2563eb", bg: "rgba(37,99,235,0.08)",  text: "#2563eb", label: "LSTM" },
+  sarima:  { border: "#dc2626", bg: "rgba(220,38,38,0.07)",  text: "#b91c1c", label: "SARIMA" },
+  xgboost: { border: "#16a34a", bg: "rgba(22,163,74,0.07)",  text: "#15803d", label: "XGBoost" },
 };
 
 const BAR_BG = {
@@ -36,7 +37,7 @@ function ChartCard({ title, sub, height = 270, children }) {
           <div style={{ fontSize: 11, fontWeight: 700, color: "#374151",
             fontFamily: "'IBM Plex Mono', monospace",
             textTransform: "uppercase", letterSpacing: 0.5 }}>{title}</div>
-          {sub && <div style={{ fontSize: 11, color: "#9ca3af", marginTop: 3 }}>{sub}</div>}
+          {sub && <div style={{ fontSize: 11, color: "#4b5563", marginTop: 3 }}>{sub}</div>}
         </div>
       )}
       <div style={{ height }}>{children}</div>
@@ -44,7 +45,7 @@ function ChartCard({ title, sub, height = 270, children }) {
   );
 }
 
-function ToggleBtn({ label, active, color, onClick }) {
+function ToggleBtn({ label, active, color, textColor, onClick }) {
   return (
     <button onClick={onClick} style={{
       display: "flex", alignItems: "center", gap: 6,
@@ -52,7 +53,7 @@ function ToggleBtn({ label, active, color, onClick }) {
       borderColor: active ? color : "#e5e7eb",
       background: active ? `${color}14` : "#fff",
       transition: "all 0.15s", fontSize: 11, fontFamily: "'IBM Plex Mono', monospace",
-      color: active ? color : "#9ca3af", fontWeight: 600,
+      color: active ? textColor : "#4b5563", fontWeight: 600,
     }}>
       <span style={{ width: 8, height: 8, borderRadius: 2, background: active ? color : "#d1d5db" }}/>
       {label}
@@ -67,10 +68,10 @@ export default function PredictionsPage() {
   const [selectedMonth, setSelectedMonth] = useState(null);
   const [selectedDay, setSelectedDay] = useState(15);
 
-  const { data: predMonthly } = useData(api.predMonthly);
-  const { data: predDaily }   = useData(api.predDaily, []);
-  const { data: errData }     = useData(api.predMonthlyErrors);
-  const { data: stats }       = useData(api.statistics);
+  const { data: predMonthly, error: predMonthlyError } = useData(api.predMonthly);
+  const { data: predDaily, error: predDailyError } = useData((signal) => api.predDaily("", signal), []);
+  const { data: errData, error: errDataError } = useData(api.predMonthlyErrors);
+  const { data: stats, error: statsError } = useData(api.statistics);
 
   // Derive the selected month/day instead of writing state during render.
   const testMonths = predMonthly?.months || [];
@@ -85,8 +86,8 @@ export default function PredictionsPage() {
     ? selectedDay
     : (dayOptions[dayOptions.length - 1] ?? selectedDay);
 
-  const { data: predHourly } = useData(
-    () => effectiveMonth ? api.predHourly(effectiveMonth, effectiveDay) : Promise.resolve(null),
+  const { data: predHourly, error: predHourlyError } = useData(
+    (signal) => effectiveMonth ? api.predHourly(effectiveMonth, effectiveDay, signal) : Promise.resolve(null),
     [effectiveMonth, effectiveDay]
   );
 
@@ -115,8 +116,13 @@ export default function PredictionsPage() {
       }));
   }
 
+  const dataError = predMonthlyError || predDailyError || errDataError
+    || statsError || predHourlyError;
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 28 }}>
+
+      <DataError error={dataError} label="prediction data" />
 
       {/* Controls */}
       <div style={{ background: "#fff", border: "1px solid #e5e7eb",
@@ -127,9 +133,9 @@ export default function PredictionsPage() {
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
           {Object.entries(MODEL_COLORS).map(([k, v]) => (
             <ToggleBtn key={k} label={v.label} active={visibleModels[k]}
-              color={v.border} onClick={() => toggle(k)} />
+              color={v.border} textColor={v.text} onClick={() => toggle(k)} />
           ))}
-          <div style={{ marginLeft: "auto", fontSize: 11, color: "#6b7280",
+          <div style={{ marginLeft: "auto", fontSize: 11, color: "#4b5563",
             fontFamily: "'IBM Plex Sans', sans-serif" }}>
             Train / Test split: {splitLabel}
           </div>
@@ -196,7 +202,7 @@ export default function PredictionsPage() {
                   border: "1.5px solid",
                   borderColor: effectiveMonth === m ? "#2563eb" : "#e5e7eb",
                   background: effectiveMonth === m ? "#eff6ff" : "#fff",
-                  color: effectiveMonth === m ? "#2563eb" : "#6b7280",
+                  color: effectiveMonth === m ? "#2563eb" : "#4b5563",
                   fontFamily: "'IBM Plex Mono', monospace", fontSize: 11, fontWeight: 600,
                 }}>{m}</button>
               ))}

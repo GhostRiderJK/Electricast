@@ -6,6 +6,7 @@ import { Bar } from "react-chartjs-2";
 import { useData } from "../hooks/useData";
 import { api } from "../utils/api";
 import { baseChartOptions } from "../utils/chartConfig";
+import DataError from "../components/DataError";
 
 Chart.register(CategoryScale, LinearScale, PointElement, LineElement,
   BarElement, Title, Tooltip, Legend);
@@ -28,15 +29,15 @@ function ScoreBadge({ label, value, best, type }) {
     }}>
       {isBest && (
         <div style={{ position: "absolute", top: -8, left: "50%", transform: "translateX(-50%)",
-          background: "#16a34a", color: "#fff", fontSize: 8, fontWeight: 700,
+          background: "#15803d", color: "#fff", fontSize: 8, fontWeight: 700,
           padding: "1px 7px", borderRadius: 10, fontFamily: "'IBM Plex Mono', monospace",
           whiteSpace: "nowrap" }}>BEST</div>
       )}
-      <div style={{ fontSize: 9, color: "#9ca3af", fontFamily: "'IBM Plex Sans', sans-serif",
+      <div style={{ fontSize: 9, color: "#4b5563", fontFamily: "'IBM Plex Sans', sans-serif",
         textTransform: "uppercase", letterSpacing: 0.5 }}>{label}</div>
       <div style={{ fontSize: 17, fontWeight: 700,
         fontFamily: "'IBM Plex Mono', monospace",
-        color: isBest ? "#16a34a" : "#111827", marginTop: 3 }}>
+        color: isBest ? "#15803d" : "#111827", marginTop: 3 }}>
         {hasValue ? value.toFixed(type === "r2" ? 4 : type === "pct" ? 1 : 0) : "N/A"}
         {hasValue && type === "pct" && "%"}
         {hasValue && type === "wh" && " Wh"}
@@ -46,11 +47,13 @@ function ScoreBadge({ label, value, best, type }) {
 }
 
 export default function MetricsPage() {
-  const { data, loading } = useData(api.metrics);
+  const { data, loading, error } = useData(api.metrics);
   const opts = baseChartOptions;
 
+  if (error) return <DataError error={error} label="model metrics" />;
+
   if (loading || !data) {
-    return <div style={{ color: "#9ca3af", fontFamily: "'IBM Plex Mono', monospace" }}>Loading metrics...</div>;
+    return <div style={{ color: "#4b5563", fontFamily: "'IBM Plex Mono', monospace" }}>Loading metrics...</div>;
   }
 
   const activeModels = MODELS.filter(m => data[m.key]?.status === "ok");
@@ -70,7 +73,7 @@ export default function MetricsPage() {
 
       {activeModels.length === 0 && (
         <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 12,
-          padding: "18px 22px", fontSize: 12, color: "#6b7280",
+          padding: "18px 22px", fontSize: 12, color: "#4b5563",
           fontFamily: "'IBM Plex Mono', monospace" }}>
           No evaluated models available.
         </div>
@@ -86,7 +89,7 @@ export default function MetricsPage() {
               <div style={{ width: 10, height: 10, borderRadius: 2, background: color }}/>
               <div style={{ fontSize: 14, fontWeight: 700, color: "#111827",
                 fontFamily: "'IBM Plex Mono', monospace" }}>{label}</div>
-              <div style={{ fontSize: 11, color: "#9ca3af", marginLeft: 6,
+              <div style={{ fontSize: 11, color: "#4b5563", marginLeft: 6,
                 fontFamily: "'IBM Plex Sans', sans-serif" }}>{m.description}</div>
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10 }}>
@@ -223,7 +226,7 @@ export default function MetricsPage() {
             <tr style={{ borderBottom: "2px solid #e5e7eb" }}>
               {["Model","R²","RMSE (Wh)","MAE (Wh)","sMAPE"].map(h => (
                 <th key={h} style={{ padding: "8px 12px", textAlign: h === "Model" ? "left" : "right",
-                  fontSize: 10, color: "#6b7280", fontWeight: 700,
+                  fontSize: 10, color: "#4b5563", fontWeight: 700,
                   textTransform: "uppercase", letterSpacing: 0.5 }}>{h}</th>
               ))}
             </tr>
@@ -254,7 +257,7 @@ export default function MetricsPage() {
                     <td key={ci} style={{
                       padding: "10px 12px", textAlign: "right",
                       fontWeight: best ? 700 : 400,
-                      color: best ? "#16a34a" : "#374151",
+                      color: best ? "#15803d" : "#374151",
                     }}>
                       {v}{best && " ★"}
                     </td>
@@ -264,7 +267,7 @@ export default function MetricsPage() {
             })}
           </tbody>
         </table>
-        <div style={{ marginTop: 10, fontSize: 10, color: "#9ca3af",
+        <div style={{ marginTop: 10, fontSize: 10, color: "#4b5563",
           fontFamily: "'IBM Plex Sans', sans-serif" }}>
           ★ Best in category (ties marked on all tied models)
         </div>

@@ -1,25 +1,28 @@
-const BASE = import.meta.env.VITE_API_URL || "http://localhost:8000";
+const BASE = import.meta.env.VITE_API_URL || "";
 
-async function get(path) {
-  const res = await fetch(`${BASE}${path}`);
-  if (!res.ok) throw new Error(`API error ${res.status}: ${path}`);
+async function get(path, signal) {
+  const res = await fetch(`${BASE}${path}`, { signal });
+  if (!res.ok) {
+    const body = await res.json().catch(() => null);
+    throw new Error(body?.detail || body?.error || `API error ${res.status}: ${path}`);
+  }
   return res.json();
 }
 
 export const api = {
-  metrics:            ()          => get("/api/metrics"),
-  statistics:         ()          => get("/api/eda/statistics"),
-  edaHourly:          ()          => get("/api/eda/hourly"),
-  edaDaily:           ()          => get("/api/eda/daily"),
-  edaMonthly:         ()          => get("/api/eda/monthly"),
-  edaYearly:          ()          => get("/api/eda/yearly"),
-  edaHeatmap:         ()          => get("/api/eda/heatmap"),
-  edaWeekdayWeekend:  ()          => get("/api/eda/weekday_vs_weekend"),
-  predMonthly:        ()          => get("/api/predictions/monthly"),
-  predDaily:          (month="")  => get(`/api/predictions/daily${month ? `?month=${month}` : ""}`),
-  predHourly:         (m, d)      => get(`/api/predictions/hourly?month=${m}&day=${d}`),
-  predWeeklyPattern:  ()          => get("/api/predictions/weekly_pattern"),
-  predMonthlyErrors:  ()          => get("/api/predictions/monthly_errors"),
+  metrics:            (signal) => get("/api/metrics", signal),
+  statistics:         (signal) => get("/api/eda/statistics", signal),
+  edaHourly:          (signal) => get("/api/eda/hourly", signal),
+  edaDaily:           (signal) => get("/api/eda/daily", signal),
+  edaMonthly:         (signal) => get("/api/eda/monthly", signal),
+  edaYearly:          (signal) => get("/api/eda/yearly", signal),
+  edaHeatmap:         (signal) => get("/api/eda/heatmap", signal),
+  edaWeekdayWeekend:  (signal) => get("/api/eda/weekday_vs_weekend", signal),
+  predMonthly:        (signal) => get("/api/predictions/monthly", signal),
+  predDaily:          (month = "", signal) => get(`/api/predictions/daily${month ? `?month=${month}` : ""}`, signal),
+  predHourly:         (m, d, signal) => get(`/api/predictions/hourly?month=${m}&day=${d}`, signal),
+  predWeeklyPattern:  (signal) => get("/api/predictions/weekly_pattern", signal),
+  predMonthlyErrors:  (signal) => get("/api/predictions/monthly_errors", signal),
 
   uploadValidate: async (file) => {
     const form = new FormData();
@@ -27,7 +30,7 @@ export const api = {
     const res = await fetch(`${BASE}/api/upload-validate`, { method: "POST", body: form });
     if (!res.ok) {
       const err = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
-      throw new Error(err.error || `Upload failed: ${res.status}`);
+      throw new Error(err.detail || err.error || `Upload failed: ${res.status}`);
     }
     return res.json();
   },

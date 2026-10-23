@@ -30,7 +30,7 @@ function ChartCard({ title, subtitle, height = 320, children }) {
     <div style={CARD}>
       <div style={{ marginBottom: 14 }}>
         <div style={{ fontSize: 13, fontWeight: 700, color: "#111827", ...MONO }}>{title}</div>
-        {subtitle && <div style={{ fontSize: 11, color: "#9ca3af", marginTop: 2 }}>{subtitle}</div>}
+        {subtitle && <div style={{ fontSize: 11, color: "#4b5563", marginTop: 2 }}>{subtitle}</div>}
       </div>
       <div style={{ height }}>{children}</div>
     </div>
@@ -43,7 +43,7 @@ function MetricCard({ label, value, color }) {
       background: `${color}08`, border: `1px solid ${color}30`,
       borderRadius: 10, padding: "12px 16px", textAlign: "center", minWidth: 100,
     }}>
-      <div style={{ fontSize: 10, color: "#6b7280", fontWeight: 600, ...MONO }}>{label}</div>
+      <div style={{ fontSize: 10, color: "#4b5563", fontWeight: 600, ...MONO }}>{label}</div>
       <div style={{ fontSize: 18, fontWeight: 700, color, ...MONO, marginTop: 4 }}>{value}</div>
     </div>
   );
@@ -94,11 +94,11 @@ export default function UploadPage() {
           <h2 style={{ fontSize: 18, fontWeight: 700, color: "#111827", ...MONO, margin: 0 }}>
             ◈ Upload &amp; Validate
           </h2>
-          <p style={{ fontSize: 12, color: "#6b7280", marginTop: 6, lineHeight: 1.6 }}>
+          <p style={{ fontSize: 12, color: "#4b5563", marginTop: 6, lineHeight: 1.6 }}>
             Upload the <b>smart_home_dataset.csv</b> to validate how models trained on
             India 2017 (Jan–Jun) perform on the first 6 months of your dataset.
             <br />
-            <span style={{ color: "#9ca3af" }}>
+            <span style={{ color: "#4b5563" }}>
               Note: Smart Home data (UTC, 2020s) will be converted to IST to match training timezone.
             </span>
           </p>
@@ -123,7 +123,7 @@ export default function UploadPage() {
           <div style={{ fontSize: 14, fontWeight: 600, color: "#374151" }}>
             Drop smart_home_dataset.csv here
           </div>
-          <div style={{ fontSize: 12, color: "#9ca3af", marginTop: 6 }}>
+          <div style={{ fontSize: 12, color: "#4b5563", marginTop: 6 }}>
             or click to browse
           </div>
           <input
@@ -138,7 +138,7 @@ export default function UploadPage() {
         {error && (
           <div style={{
             marginTop: 16, padding: "12px 16px", borderRadius: 8,
-            background: "#fef2f2", border: "1px solid #fecaca", color: "#dc2626",
+            background: "#fef2f2", border: "1px solid #fecaca", color: "#b91c1c",
             fontSize: 12, ...MONO,
           }}>
             {error}
@@ -149,7 +149,7 @@ export default function UploadPage() {
           <div style={{ fontSize: 12, fontWeight: 700, color: "#374151", ...MONO, marginBottom: 8 }}>
             How it works
           </div>
-          <ol style={{ fontSize: 12, color: "#6b7280", margin: 0, paddingLeft: 20, lineHeight: 2 }}>
+          <ol style={{ fontSize: 12, color: "#4b5563", margin: 0, paddingLeft: 20, lineHeight: 2 }}>
             <li>XGBoost model is trained on India residential building data — <b>Jan–Jun 2017</b></li>
             <li>Upload the <code>smart_home_dataset.csv</code> (UTC timestamps, 2020–2023)</li>
             <li>Data is converted UTC → IST and resampled to hourly</li>
@@ -169,7 +169,7 @@ export default function UploadPage() {
         <div style={{ fontSize: 14, fontWeight: 600, color: "#374151" }}>
           Processing dataset &amp; running models…
         </div>
-        <div style={{ fontSize: 12, color: "#9ca3af", marginTop: 8 }}>
+        <div style={{ fontSize: 12, color: "#4b5563", marginTop: 8 }}>
           This may take a moment
         </div>
       </div>
@@ -184,7 +184,7 @@ export default function UploadPage() {
           padding: "16px 24px", borderRadius: 10, display: "inline-block",
           background: "#fef2f2", border: "1px solid #fecaca",
         }}>
-          <div style={{ fontSize: 13, fontWeight: 600, color: "#dc2626", ...MONO }}>{error}</div>
+          <div style={{ fontSize: 13, fontWeight: 600, color: "#b91c1c", ...MONO }}>{error}</div>
         </div>
         <div style={{ marginTop: 20 }}>
           <button
@@ -234,7 +234,7 @@ export default function UploadPage() {
           <h2 style={{ fontSize: 18, fontWeight: 700, color: "#111827", ...MONO, margin: 0 }}>
             ◈ Upload Validation Results
           </h2>
-          <p style={{ fontSize: 12, color: "#6b7280", marginTop: 4 }}>
+          <p style={{ fontSize: 12, color: "#4b5563", marginTop: 4 }}>
             {dataset_info.filename} — {dataset_info.date_range} ({dataset_info.validation_hours} hours)
           </p>
         </div>
@@ -259,13 +259,13 @@ export default function UploadPage() {
       {/* Metrics cards */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 12, marginBottom: 20 }}>
         <div style={{ ...CARD, padding: "16px 20px" }}>
-          <div style={{ fontSize: 11, fontWeight: 700, color: "#16a34a", ...MONO, marginBottom: 10 }}>XGBoost</div>
+          <div style={{ fontSize: 11, fontWeight: 700, color: "#15803d", ...MONO, marginBottom: 10 }}>XGBoost</div>
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
             <MetricCard label="R²" value={metrics.xgboost.R2}
-              color={metrics.xgboost.R2 < 0 ? "#dc2626" : "#16a34a"} />
-            <MetricCard label="RMSE (Wh)" value={metrics.xgboost.RMSE} color="#16a34a" />
-            <MetricCard label="MAE (Wh)" value={metrics.xgboost.MAE} color="#16a34a" />
-            <MetricCard label="sMAPE" value={`${metrics.xgboost.sMAPE}%`} color="#16a34a" />
+              color={metrics.xgboost.R2 < 0 ? "#dc2626" : "#15803d"} />
+            <MetricCard label="RMSE (Wh)" value={metrics.xgboost.RMSE} color="#15803d" />
+            <MetricCard label="MAE (Wh)" value={metrics.xgboost.MAE} color="#15803d" />
+            <MetricCard label="sMAPE" value={`${metrics.xgboost.sMAPE}%`} color="#15803d" />
           </div>
         </div>
       </div>
@@ -297,17 +297,17 @@ export default function UploadPage() {
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12, ...MONO }}>
             <thead>
               <tr style={{ borderBottom: "2px solid #e5e7eb" }}>
-                <th style={{ textAlign: "left", padding: "8px 12px", color: "#6b7280" }}>Month</th>
-                <th style={{ textAlign: "right", padding: "8px 12px", color: "#16a34a" }}>XGB MAE (Wh)</th>
-                <th style={{ textAlign: "right", padding: "8px 12px", color: "#16a34a" }}>XGB RMSE (Wh)</th>
+                <th style={{ textAlign: "left", padding: "8px 12px", color: "#4b5563" }}>Month</th>
+                <th style={{ textAlign: "right", padding: "8px 12px", color: "#15803d" }}>XGB MAE (Wh)</th>
+                <th style={{ textAlign: "right", padding: "8px 12px", color: "#15803d" }}>XGB RMSE (Wh)</th>
               </tr>
             </thead>
             <tbody>
               {Object.entries(monthly_metrics).map(([month, data]) => (
                 <tr key={month} style={{ borderBottom: "1px solid #f3f4f6" }}>
                   <td style={{ padding: "8px 12px", fontWeight: 600, color: "#374151" }}>{month}</td>
-                  <td style={{ textAlign: "right", padding: "8px 12px", color: "#16a34a" }}>{data.xgboost?.mae}</td>
-                  <td style={{ textAlign: "right", padding: "8px 12px", color: "#16a34a" }}>{data.xgboost?.rmse}</td>
+                  <td style={{ textAlign: "right", padding: "8px 12px", color: "#15803d" }}>{data.xgboost?.mae}</td>
+                  <td style={{ textAlign: "right", padding: "8px 12px", color: "#15803d" }}>{data.xgboost?.rmse}</td>
                 </tr>
               ))}
             </tbody>

@@ -15,3 +15,6 @@ One line per ambiguous choice; the more conservative option wins.
 - 1.5: The split label shows percentages computed from `statistics.train_hours`/`test_hours` plus the raw hour counts, so the label is auditable; it renders "loading…" until statistics arrive rather than guessing.
 - 1.7: R² uses a green threshold of 0.8 and red only for negative values; 0–0.8 stays neutral because no documented target exists, and coloring a merely modest score red would overstate failure.
 - 1.9: The selected month/day are derived from fetched data (`selectedMonth ?? first test month`, day list from `predDaily` labels) instead of writing state during render; switching to a shorter month clamps an out-of-range day to that month's last available day.
+- 1.10: The API base now defaults to same-origin (`""`); Vite dev and preview proxy `/api` to `http://localhost:8000`, and `VITE_API_URL` remains the override for split-origin deployments.
+- 1.10: Muted text moved from `#9ca3af`/`#6b7280` to `#4b5563`, and small green/red accent text to `#15803d`/`#b91c1c`; chart series keep `#16a34a`/`#dc2626` because graphical elements only need 3:1.
+- 1.10: Pages with several data hooks show one alert for the first failure instead of stacking duplicate banners; MetricsBar has its own alert because it renders outside page content.

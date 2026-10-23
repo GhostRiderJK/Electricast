@@ -7,6 +7,7 @@ import { Line, Bar } from "react-chartjs-2";
 import { useData } from "../hooks/useData";
 import { api } from "../utils/api";
 import { baseChartOptions } from "../utils/chartConfig";
+import DataError from "../components/DataError";
 
 Chart.register(CategoryScale, LinearScale, PointElement, LineElement,
   BarElement, Title, Tooltip, Legend, Filler);
@@ -21,7 +22,7 @@ const MODEL_COLORS = {
 
 export default function WeeklyPage() {
   const [selectedDay, setSelectedDay] = useState("Mon");
-  const { data: weeklyData } = useData(api.predWeeklyPattern);
+  const { data: weeklyData, error } = useData(api.predWeeklyPattern);
   const opts = baseChartOptions;
 
   const dayData = weeklyData?.[selectedDay];
@@ -38,6 +39,8 @@ export default function WeeklyPage() {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 28 }}>
+      <DataError error={error} label="weekly pattern data" />
+
       {/* Day selector */}
       <div style={{ background: "#fff", border: "1px solid #e5e7eb",
         borderRadius: 12, padding: "18px 22px" }}>
@@ -56,7 +59,7 @@ export default function WeeklyPage() {
                 border: "2px solid",
                 borderColor: isActive ? (isWeekend ? "#dc2626" : "#2563eb") : "#e5e7eb",
                 background: isActive ? (isWeekend ? "#fef2f2" : "#eff6ff") : "#f9fafb",
-                color: isActive ? (isWeekend ? "#dc2626" : "#2563eb") : "#9ca3af",
+                color: isActive ? (isWeekend ? "#b91c1c" : "#2563eb") : "#4b5563",
                 fontFamily: "'IBM Plex Mono', monospace", fontSize: 11, fontWeight: 700,
                 textTransform: "uppercase", transition: "all 0.15s",
               }}>

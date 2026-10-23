@@ -6,13 +6,21 @@ export function useData(fetcher, deps = []) {
   const [error, setError] = useState(null);
 
   useEffect(() => {
-    let cancelled = false;
+    const controller = new AbortController();
     setLoading(true);
     setError(null);
-    fetcher()
-      .then((d) => { if (!cancelled) { setData(d); setLoading(false); } })
-      .catch((e) => { if (!cancelled) { setError(e.message); setLoading(false); } });
-    return () => { cancelled = true; };
+    fetcher(controller.signal)
+      .then((d) => {
+        if (controller.signal.aborted) return;
+        setData(d);
+        setLoading(false);
+      })
+      .catch((e) => {
+        if (controller.signal.aborted || e.name === "AbortError") return;
+        setError(e.message);
+        setLoading(false);
+      });
+    return () => controller.abort();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, deps);
 

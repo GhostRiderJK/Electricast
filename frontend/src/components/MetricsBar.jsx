@@ -1,10 +1,11 @@
 import { useData } from "../hooks/useData";
 import { api } from "../utils/api";
+import DataError from "./DataError";
 
 const MODEL_CONFIG = {
   lstm:    { label: "LSTM",    accent: "#2563eb", bg: "#eff6ff", icon: "⬡" },
-  sarima:  { label: "SARIMA",  accent: "#dc2626", bg: "#fef2f2", icon: "⌇" },
-  xgboost: { label: "XGBoost", accent: "#16a34a", bg: "#f0fdf4", icon: "⬢" },
+  sarima:  { label: "SARIMA",  accent: "#b91c1c", bg: "#fef2f2", icon: "⌇" },
+  xgboost: { label: "XGBoost", accent: "#15803d", bg: "#f0fdf4", icon: "⬢" },
 };
 
 function MetricCard({ model, metrics }) {
@@ -38,7 +39,7 @@ function MetricCard({ model, metrics }) {
           fontFamily: "'IBM Plex Mono', monospace", lineHeight: 1.2,
         }}>{cfg.label}</div>
         <div style={{
-          fontSize: 9, color: "#9ca3af", fontFamily: "'IBM Plex Sans', sans-serif",
+          fontSize: 9, color: "#4b5563", fontFamily: "'IBM Plex Sans', sans-serif",
           whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
         }}>{metrics.period}</div>
       </div>
@@ -46,13 +47,13 @@ function MetricCard({ model, metrics }) {
         {items.map(({ k, v, good }) => (
           <div key={k} style={{ textAlign: "right" }}>
             <div style={{
-              fontSize: 9, color: "#6b7280",
+              fontSize: 9, color: "#4b5563",
               fontFamily: "'IBM Plex Sans', sans-serif", marginBottom: 1,
             }}>{k}</div>
             <div style={{
               fontSize: 13, fontWeight: 700,
               fontFamily: "'IBM Plex Mono', monospace",
-              color: good === true ? "#16a34a" : good === false ? "#dc2626" : "#111827",
+              color: good === true ? "#15803d" : good === false ? "#dc2626" : "#111827",
             }}>{v}</div>
           </div>
         ))}
@@ -62,7 +63,7 @@ function MetricCard({ model, metrics }) {
 }
 
 export default function MetricsBar() {
-  const { data, loading } = useData(api.metrics);
+  const { data, loading, error } = useData(api.metrics);
 
   if (loading) return (
     <div style={{ display: "flex", gap: 10 }}>
@@ -74,6 +75,8 @@ export default function MetricsBar() {
       ))}
     </div>
   );
+
+  if (error) return <DataError error={error} label="model metrics" />;
 
   const active = ["lstm", "sarima", "xgboost"].filter(
     model => data?.[model]?.status === "ok"

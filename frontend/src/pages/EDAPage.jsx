@@ -7,6 +7,7 @@ import { Line, Bar } from "react-chartjs-2";
 import { useData } from "../hooks/useData";
 import { api } from "../utils/api";
 import { baseChartOptions, COLORS } from "../utils/chartConfig";
+import DataError from "../components/DataError";
 
 Chart.register(CategoryScale, LinearScale, PointElement, LineElement,
   BarElement, Title, Tooltip, Legend, Filler);
@@ -18,7 +19,7 @@ function SectionHeader({ title, sub }) {
         fontFamily: "'IBM Plex Mono', monospace", margin: 0, letterSpacing: -0.3 }}>
         {title}
       </h2>
-      {sub && <p style={{ fontSize: 12, color: "#6b7280", marginTop: 4,
+      {sub && <p style={{ fontSize: 12, color: "#4b5563", marginTop: 4,
         fontFamily: "'IBM Plex Sans', sans-serif" }}>{sub}</p>}
     </div>
   );
@@ -46,11 +47,11 @@ function StatBox({ label, value, unit }) {
   return (
     <div style={{ background: "#f9fafb", borderRadius: 8, padding: "12px 14px",
       border: "1px solid #e5e7eb" }}>
-      <div style={{ fontSize: 10, color: "#9ca3af", fontFamily: "'IBM Plex Sans', sans-serif",
+      <div style={{ fontSize: 10, color: "#4b5563", fontFamily: "'IBM Plex Sans', sans-serif",
         textTransform: "uppercase", letterSpacing: 0.5 }}>{label}</div>
       <div style={{ fontSize: 18, fontWeight: 700, fontFamily: "'IBM Plex Mono', monospace",
         color: "#111827", marginTop: 4 }}>
-        {value}<span style={{ fontSize: 11, color: "#6b7280", marginLeft: 3 }}>{unit}</span>
+        {value}<span style={{ fontSize: 11, color: "#4b5563", marginLeft: 3 }}>{unit}</span>
       </div>
     </div>
   );
@@ -117,18 +118,22 @@ function Heatmap({ data }) {
 }
 
 export default function EDAPage() {
-  const { data: hourly } = useData(api.edaHourly);
-  const { data: monthly } = useData(api.edaMonthly);
-  const { data: daily }  = useData(api.edaDaily);
-  const { data: yearly } = useData(api.edaYearly);
-  const { data: heatmap } = useData(api.edaHeatmap);
-  const { data: wdwe }   = useData(api.edaWeekdayWeekend);
-  const { data: stats }  = useData(api.statistics);
+  const { data: hourly, error: hourlyError } = useData(api.edaHourly);
+  const { data: monthly, error: monthlyError } = useData(api.edaMonthly);
+  const { data: daily, error: dailyError }  = useData(api.edaDaily);
+  const { data: yearly, error: yearlyError } = useData(api.edaYearly);
+  const { data: heatmap, error: heatmapError } = useData(api.edaHeatmap);
+  const { data: wdwe, error: wdweError }   = useData(api.edaWeekdayWeekend);
+  const { data: stats, error: statsError }  = useData(api.statistics);
+  const dataError = hourlyError || monthlyError || dailyError || yearlyError
+    || heatmapError || wdweError || statsError;
 
   const opts = baseChartOptions;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 32 }}>
+
+      <DataError error={dataError} label="EDA data" />
 
       {/* Dataset Stats */}
       <div>
@@ -315,10 +320,10 @@ export default function EDAPage() {
           <Heatmap data={heatmap} />
         </ChartCard>
         <div style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 8, justifyContent: "flex-end" }}>
-          <span style={{ fontSize: 10, color: "#9ca3af" }}>Low</span>
+          <span style={{ fontSize: 10, color: "#4b5563" }}>Low</span>
           <div style={{ width: 120, height: 10, borderRadius: 4,
             background: "linear-gradient(to right, #f5e642, #ff7f00, #cc2200)", border: "1px solid #e5e7eb" }}/>
-          <span style={{ fontSize: 10, color: "#9ca3af" }}>High</span>
+          <span style={{ fontSize: 10, color: "#4b5563" }}>High</span>
         </div>
       </div>
     </div>

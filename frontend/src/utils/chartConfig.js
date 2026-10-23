@@ -44,12 +44,12 @@ export const baseChartOptions = {
   scales: {
     x: {
       grid: { color: "rgba(0,0,0,0.04)", drawBorder: false },
-      ticks: { color: "#9ca3af", font: { family: "'IBM Plex Mono', monospace", size: 10 }, maxTicksLimit: 12 },
+      ticks: { color: "#4b5563", font: { family: "'IBM Plex Mono', monospace", size: 10 }, maxTicksLimit: 12 },
       border: { display: false },
     },
     y: {
       grid: { color: "rgba(0,0,0,0.04)", drawBorder: false },
-      ticks: { color: "#9ca3af", font: { family: "'IBM Plex Mono', monospace", size: 10 } },
+      ticks: { color: "#4b5563", font: { family: "'IBM Plex Mono', monospace", size: 10 } },
       border: { display: false },
     },
   },

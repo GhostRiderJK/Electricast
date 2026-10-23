@@ -41,7 +41,7 @@ export default function App() {
             <div>
               <div style={{ fontSize: 13, fontWeight: 700, color: "#111827",
                 fontFamily: "'IBM Plex Mono', monospace", lineHeight: 1.1 }}>ElectriCast</div>
-              <div style={{ fontSize: 9, color: "#9ca3af", fontFamily: "'IBM Plex Sans', sans-serif" }}>
+              <div style={{ fontSize: 9, color: "#4b5563", fontFamily: "'IBM Plex Sans', sans-serif" }}>
                 IIT Bombay Residential Buildings · Energy Forecasting
               </div>
             </div>
@@ -56,7 +56,7 @@ export default function App() {
                   display: "flex", alignItems: "center", gap: 6,
                   padding: "6px 14px", borderRadius: 7, border: "none", cursor: "pointer",
                   background: active ? "#eff6ff" : "transparent",
-                  color: active ? "#2563eb" : "#6b7280",
+                  color: active ? "#2563eb" : "#4b5563",
                   fontFamily: "'IBM Plex Mono', monospace",
                   fontSize: 11, fontWeight: active ? 700 : 500,
                   transition: "all 0.15s",
@@ -72,8 +72,8 @@ export default function App() {
           {/* Badge */}
           <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
             {[
-              { label: "SARIMA", color: "#dc2626" },
-              { label: "XGBoost", color: "#16a34a" },
+              { label: "SARIMA", color: "#b91c1c" },
+              { label: "XGBoost", color: "#15803d" },
             ].map(({ label, color }) => (
               <span key={label} style={{
                 fontSize: 9, fontWeight: 700, padding: "2px 8px",
@@ -106,7 +106,7 @@ export default function App() {
       {/* Footer */}
       <footer style={{ borderTop: "1px solid #e5e7eb", background: "#fff",
         padding: "12px 28px", textAlign: "center" }}>
-        <div style={{ fontSize: 10, color: "#9ca3af", fontFamily: "'IBM Plex Mono', monospace" }}>
+        <div style={{ fontSize: 10, color: "#4b5563", fontFamily: "'IBM Plex Mono', monospace" }}>
           ElectriCast &nbsp;·&nbsp; Energy Demand Forecasting &nbsp;·&nbsp;
           SARIMA · XGBoost
         </div>
