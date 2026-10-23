@@ -7,14 +7,12 @@ Provides upload endpoint for validating trained models on new datasets.
 import os
 import io
 import json
-import pickle
 import numpy as np
 import pandas as pd
 from fastapi import FastAPI, Query, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from typing import Optional
-from sklearn.preprocessing import MinMaxScaler
 from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
 
 app = FastAPI(
@@ -214,42 +212,8 @@ def monthly_errors():
 # ─────────────────────────────────────────────────────────────────
 
 MODELS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "models")
-LSTM_WINDOW = 24
 
 MAX_UPLOAD_SIZE = 50 * 1024 * 1024  # 50 MB
-
-
-def _load_lstm_model():
-    """Load saved LSTM model and scaler."""
-    import torch
-    import torch.nn as nn
-
-    class LSTMModel(nn.Module):
-        def __init__(self):
-            super().__init__()
-            self.lstm1 = nn.LSTM(1, 64, batch_first=True)
-            self.drop1 = nn.Dropout(0.2)
-            self.lstm2 = nn.LSTM(64, 32, batch_first=True)
-            self.drop2 = nn.Dropout(0.2)
-            self.fc = nn.Linear(32, 1)
-
-        def forward(self, x):
-            x, _ = self.lstm1(x)
-            x = self.drop1(x)
-            x, _ = self.lstm2(x)
-            x = self.drop2(x[:, -1, :])
-            return self.fc(x)
-
-    model = LSTMModel()
-    state_path = os.path.join(MODELS_DIR, "lstm_model.pt")
-    model.load_state_dict(torch.load(state_path, map_location="cpu", weights_only=True))
-    model.eval()
-
-    scaler_path = os.path.join(MODELS_DIR, "lstm_scaler.pkl")
-    with open(scaler_path, "rb") as f:
-        scaler = pickle.load(f)
-
-    return model, scaler
 
 
 def _load_xgb_model():

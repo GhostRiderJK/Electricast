@@ -1,14 +1,14 @@
 import {
   Chart, CategoryScale, LinearScale, PointElement, LineElement,
-  BarElement, Title, Tooltip, Legend, RadialLinearScale
+  BarElement, Title, Tooltip, Legend
 } from "chart.js";
-import { Bar, Radar } from "react-chartjs-2";
+import { Bar } from "react-chartjs-2";
 import { useData } from "../hooks/useData";
 import { api } from "../utils/api";
 import { baseChartOptions } from "../utils/chartConfig";
 
 Chart.register(CategoryScale, LinearScale, PointElement, LineElement,
-  BarElement, Title, Tooltip, Legend, RadialLinearScale);
+  BarElement, Title, Tooltip, Legend);
 
 const MODELS = [
   { key: "lstm",    label: "LSTM",    color: "#2563eb", bg: "rgba(37,99,235,0.15)" },

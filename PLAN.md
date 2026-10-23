@@ -4,7 +4,7 @@ Rules: one task per iteration. Tick [x] only after the VERIFY step passes.
 ## Phase 0 — Hygiene
 - [x] 0.1 Root .gitignore; git rm --cached node_modules, .DS_Store, dist, __pycache__
 - [x] 0.2 Pin requirements.txt to installed versions; align local/Docker Python
-- [ ] 0.3 Remove dead _load_lstm_model(), unused Radar import; move Template.ipynb to notebooks/legacy/
+- [x] 0.3 Remove dead _load_lstm_model(), unused Radar import; move Template.ipynb to notebooks/legacy/
 
 ## Phase 1 — Stop the UI lying
 - [ ] 1.1 Units: Wh vs kWh fixed in every label, axis and title (EDAPage, MetricsBar, MetricsPage, charts)
