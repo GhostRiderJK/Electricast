@@ -124,6 +124,33 @@ def fill_short_gaps(series, max_gap_hours=MAX_GAP_HOURS):
     return filled, imputed, excluded, runs
 
 
+OUTLIER_IQR_MULTIPLIER = 3.0
+OUTLIER_MIN_SAMPLES = 100
+
+
+def fit_outlier_cap(train_values, k=OUTLIER_IQR_MULTIPLIER,
+                    min_samples=OUTLIER_MIN_SAMPLES):
+    """Upper cap = Q3 + k*IQR over training values only.
+
+    Callers must pass only training hours (no validation/test hours), so the
+    cap cannot leak information from the evaluation window.
+    """
+    values = pd.Series(train_values, dtype=float).dropna()
+    if len(values) < min_samples:
+        raise ValueError(
+            f"need at least {min_samples} training values, got {len(values)}"
+        )
+    q1, q3 = values.quantile([0.25, 0.75])
+    return float(q3 + k * (q3 - q1))
+
+
+def apply_outlier_cap(series, cap):
+    """Clip values above a train-fitted cap; return (capped, n_capped)."""
+    capped = series.clip(upper=cap)
+    n_capped = int((series > cap).sum())
+    return capped, n_capped
+
+
 def load_apartments(data_dir=DATA_DIR):
     """Load every CSV in data_dir and return (apartments, report).
 
