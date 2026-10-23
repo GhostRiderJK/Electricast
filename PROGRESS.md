@@ -98,3 +98,8 @@ One entry per iteration: date, item id, change, evidence, numbers.
 - Inspected all 39 files: 187,796 rows are stamped at :30 UTC (= exact IST hours) while 8,653 rows are at :00 UTC; 38 files contribute a May-2018 :00-UTC block (7,460 rows, 2018-05-23 19:00 → 2018-05-31 23:00 UTC). `13.csv` is only 37 rows from Nov 2017.
 - Added `ist_hour_index()` (UTC→IST, floor to containing hour) and documented the decision: :00-UTC rows fall at IST :30 and join the containing IST hour; no apartment-hour bucket is duplicated (0 across all files).
 - Evidence: after the explicit floor the panel is unchanged (12,891 × 39, max 39 reporting, median 23, 5,291 zero-report hours, checksum 63,669,648.7 Wh).
+
+## 2026-10-23 — 2.4 Stable panel and target
+
+- Added `apartment_coverage`, `stable_apartments`, and `build_target`. Stable window is 2017-05-01→2017-11-30 (the longest dense block); 24/39 apartments clear 90% coverage (90.1–91.5%), 15 are dropped.
+- Target is the per-hour mean of reporting stable apartments; `n_reporting` counts them. Numbers: 7,600 non-null target hours of 12,891, mean 335.54 Wh, range 0.14–2,001.12 Wh; manual check at 2017-11-26 03:00 IST gives 24 reporters, mean 123.48 Wh = target. Fold windows have 2,370 usable hours (Sep–Dec 2017) and 214 (May–Jun 2018).

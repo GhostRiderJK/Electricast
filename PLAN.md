@@ -22,7 +22,7 @@ Rules: one task per iteration. Tick [x] only after the VERIFY step passes.
 - [x] 2.1 Load all 39 files, full date range; count read vs failed; no bare except
 - [x] 2.2 Per-apartment hourly resample with sum(min_count=1); keep n_reporting
 - [x] 2.3 Inspect the May-2018 :00-UTC file(s); document handling in DECISIONS.md
-- [ ] 2.4 Target = mean load per reporting apartment; build stable panel (>90% coverage)
+- [x] 2.4 Target = mean load per reporting apartment; build stable panel (>90% coverage)
 - [ ] 2.5 Gaps: interpolate only <=6h; longer gaps flagged and excluded from train and eval
 - [ ] 2.6 Outlier cap fitted on train only
 - [ ] 2.7 Flag suspect_inactive apartments (December mean <100 Wh/h)

@@ -59,6 +59,33 @@ def build_panel(apartments):
     return panel, n_reporting
 
 
+STABLE_START = "2017-05-01"
+STABLE_END = "2017-11-30 23:00"
+STABLE_MIN_COVERAGE = 0.90
+
+
+def apartment_coverage(panel, start=STABLE_START, end=STABLE_END):
+    """Fraction of expected IST hours observed per apartment in a window."""
+    index = pd.date_range(start, end, freq="h", tz=TZ)
+    return panel.reindex(index).notna().mean().sort_values(ascending=False)
+
+
+def stable_apartments(panel, start=STABLE_START, end=STABLE_END,
+                      min_coverage=STABLE_MIN_COVERAGE):
+    coverage = apartment_coverage(panel, start, end)
+    return coverage[coverage >= min_coverage].index.tolist(), coverage
+
+
+def build_target(panel, stable):
+    """Mean load per reporting stable apartment and the reporting count."""
+    subset = panel[stable]
+    n_reporting = subset.notna().sum(axis=1).astype(int)
+    n_reporting.name = "n_reporting"
+    target = subset.mean(axis=1)
+    target.name = "target_wh"
+    return target, n_reporting
+
+
 def load_apartments(data_dir=DATA_DIR):
     """Load every CSV in data_dir and return (apartments, report).
 
