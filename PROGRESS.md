@@ -125,6 +125,12 @@ One entry per iteration: date, item id, change, evidence, numbers.
 - Evidence: JSON reports 39/39 files, 196,449 rows, 12,891 panel hours, 24 stable apartments, 7,683 valid target hours, 5,208 excluded, 21 flagged inactive; page renders 6 KPI cards, 3 tables (70 rows), and a 498×280 chart with no console errors; backend stopped shows `Could not load data quality: API error 500: /api/data_quality`; body scrollWidth 600 vs viewport 604 after the nav fix. Screenshot capture was unavailable (in-app browser viewport), so verification used DOM/API checks.
 - Wrote `CHECKPOINT_DATA.md` with the Phase 2 numbers, fold-window counts, regeneration commands, and remaining data risks.
 
+## 2026-10-23 — 3.1 Baselines
+
+- Added `backend/evaluate.py` with day-ahead baselines: persistence (last valid value before 00:00 IST, held flat), seasonal naive 24 h, same-hour-last-week (168 h), and mean of the same hour on the previous four same weekdays (all four required).
+- Evidence: synthetic ramp shows persistence errors 1→24 across a day, seasonal-naive error 24, weekly error 168, four-week mean error 420; constant series yields zero errors; a missing previous day makes seasonal naive NaN while persistence falls back to the last valid value; a missing same weekday makes the four-week mean NaN. On July 2017 (744 h), MAE: persistence 119.56, seasonal naive 75.01, last-week 95.00, four-week mean 86.94 Wh.
+
+
 
 
 

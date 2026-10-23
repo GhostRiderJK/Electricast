@@ -29,7 +29,7 @@ Rules: one task per iteration. Tick [x] only after the VERIFY step passes.
 - [x] 2.8 Write data_quality.json and a Data Quality page
 
 ## Phase 3 — Evaluation (backend/evaluate.py)
-- [ ] 3.1 Baselines: persistence, seasonal naive 24h, same-hour-last-week, mean of last 4 same weekdays
+- [x] 3.1 Baselines: persistence, seasonal naive 24h, same-hour-last-week, mean of last 4 same weekdays
 - [ ] 3.2 Metrics: RMSE, MAE, WAPE, MASE, bias, R²; guarded sMAPE
 - [ ] 3.3 Day-ahead protocol + 4+ fold expanding-window backtest (one fold May–Jun 2018, one fold Sep–Dec 2017)
 - [ ] 3.4 results.json per fold/model/metric; paired significance vs best baseline
