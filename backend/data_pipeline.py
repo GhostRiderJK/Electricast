@@ -6,11 +6,13 @@ import glob
 import json
 import os
 
+import numpy as np
 import pandas as pd
 
 DATA_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "data"))
 TZ = "Asia/Kolkata"
 REQUIRED_COLUMNS = ["TS", "W1", "W2", "W3"]
+MAX_GAP_HOURS = 6
 
 LOAD_ERRORS = (
     FileNotFoundError,
@@ -84,6 +86,42 @@ def build_target(panel, stable):
     target = subset.mean(axis=1)
     target.name = "target_wh"
     return target, n_reporting
+
+
+def fill_short_gaps(series, max_gap_hours=MAX_GAP_HOURS):
+    """Linearly interpolate interior NaN runs up to max_gap_hours.
+
+    Returns (filled, imputed, excluded, runs). Runs longer than the limit and
+    runs touching either end stay NaN and are marked excluded.
+    """
+    filled = series.astype(float).copy()
+    imputed = pd.Series(False, index=series.index)
+    excluded = pd.Series(False, index=series.index)
+    runs = []
+    isna = series.isna()
+    groups = (isna != isna.shift()).cumsum()
+
+    for _, block in series.groupby(groups):
+        if not block.isna().all():
+            continue
+        hours = len(block)
+        start, end = block.index[0], block.index[-1]
+        edge = start == series.index[0] or end == series.index[-1]
+        runs.append({
+            "start": start.isoformat(),
+            "end": end.isoformat(),
+            "hours": hours,
+            "edge": bool(edge),
+        })
+        if hours <= max_gap_hours and not edge:
+            left = series.loc[:start].dropna().iloc[-1]
+            right = series.loc[end:].dropna().iloc[0]
+            filled.loc[block.index] = np.linspace(left, right, hours + 2)[1:-1]
+            imputed.loc[block.index] = True
+        else:
+            excluded.loc[block.index] = True
+
+    return filled, imputed, excluded, runs
 
 
 def load_apartments(data_dir=DATA_DIR):

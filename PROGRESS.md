@@ -103,3 +103,9 @@ One entry per iteration: date, item id, change, evidence, numbers.
 
 - Added `apartment_coverage`, `stable_apartments`, and `build_target`. Stable window is 2017-05-01→2017-11-30 (the longest dense block); 24/39 apartments clear 90% coverage (90.1–91.5%), 15 are dropped.
 - Target is the per-hour mean of reporting stable apartments; `n_reporting` counts them. Numbers: 7,600 non-null target hours of 12,891, mean 335.54 Wh, range 0.14–2,001.12 Wh; manual check at 2017-11-26 03:00 IST gives 24 reporters, mean 123.48 Wh = target. Fold windows have 2,370 usable hours (Sep–Dec 2017) and 214 (May–Jun 2018).
+
+## 2026-10-23 — 2.5 Short-gap interpolation
+
+- Added `MAX_GAP_HOURS = 6` and `fill_short_gaps()`, which records every NaN run, linearly interpolates interior runs of ≤6 h, and marks longer or edge runs in `excluded`; returns `(filled, imputed, excluded, runs)`.
+- Evidence: synthetic 48-h series with a 3-h, a 10-h, and two edge gaps → exactly 3 h imputed, 12 h excluded, 4 runs recorded, filled values [10, 11, 12] between neighbours 9 and 13. Real 24-apartment target: 66 gap runs, longest 3,514 h; 83 h imputed, 5,208 h excluded, 7,683 valid hours remain (up from 7,600). Asserted no long/edge gap received a value and no hour is both imputed and excluded.
+
