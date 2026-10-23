@@ -13,3 +13,4 @@ One line per ambiguous choice; the more conservative option wins.
 - 1.4: Daily means were derived from the raw CSVs with the existing 2017 cleaning pipeline and written into `model_results.json` as `eda.yearly_daily`; no model was retrained and all existing metrics/prediction arrays were verified byte-identical after the JSON update.
 - 1.4: `/api/eda/yearly` returns daily means by default and falls back to the legacy sampled `eda.yearly` series if an older results file is loaded.
 - 1.5: The split label shows percentages computed from `statistics.train_hours`/`test_hours` plus the raw hour counts, so the label is auditable; it renders "loading…" until statistics arrive rather than guessing.
+- 1.7: R² uses a green threshold of 0.8 and red only for negative values; 0–0.8 stays neutral because no documented target exists, and coloring a merely modest score red would overstate failure.

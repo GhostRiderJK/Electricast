@@ -261,7 +261,8 @@ export default function UploadPage() {
         <div style={{ ...CARD, padding: "16px 20px" }}>
           <div style={{ fontSize: 11, fontWeight: 700, color: "#16a34a", ...MONO, marginBottom: 10 }}>XGBoost</div>
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-            <MetricCard label="R²" value={metrics.xgboost.R2} color="#16a34a" />
+            <MetricCard label="R²" value={metrics.xgboost.R2}
+              color={metrics.xgboost.R2 < 0 ? "#dc2626" : "#16a34a"} />
             <MetricCard label="RMSE (Wh)" value={metrics.xgboost.RMSE} color="#16a34a" />
             <MetricCard label="MAE (Wh)" value={metrics.xgboost.MAE} color="#16a34a" />
             <MetricCard label="sMAPE" value={`${metrics.xgboost.sMAPE}%`} color="#16a34a" />

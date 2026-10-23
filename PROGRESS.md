@@ -56,3 +56,9 @@ One entry per iteration: date, item id, change, evidence, numbers.
 
 - EDAPage overview now says `timezone: IST (Asia/Kolkata)` with an IIT Bombay fallback dataset name; header subtitle now reads `IIT Bombay Residential Buildings · Energy Forecasting`.
 - Evidence: production build contained one `timezone: IST` and no `timezone: UTC`; live page at :3100 showed the new header and IST subtitle (`header: true`, `ist: true`, `utc: false`).
+
+## 2026-10-23 — 1.7 R² color thresholds
+
+- MetricsBar R²: green at ≥0.8, red only when negative, neutral otherwise (was green only >0.85, so the real 0.8238 was shown red).
+- UploadPage R² card is red when the uploaded-data score is negative, green otherwise.
+- Evidence: live computed styles — XGBoost `0.8238` → `rgb(22,163,74)` green, SARIMA `-1.3261` → `rgb(220,38,38)` red; uploading `smart_home_dataset.csv` through the real file input produced R² `-0.6799` rendered `rgb(220,38,38)`. Build passed (44 modules, 1.51s).

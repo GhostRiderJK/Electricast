@@ -44,7 +44,7 @@ function MetricCard({ model, metrics }) {
         </div>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px 16px" }}>
           {[
-            { k: "R²",    v: metrics.R2.toFixed(4),     good: metrics.R2 > 0.85 },
+            { k: "R²",    v: metrics.R2.toFixed(4),     good: metrics.R2 >= 0.8 ? true : metrics.R2 < 0 ? false : null },
             { k: "RMSE",  v: `${metrics.RMSE.toFixed(0)} Wh`, good: null },
             { k: "MAE",   v: `${metrics.MAE.toFixed(0)} Wh`,  good: null },
             { k: "sMAPE", v: `${metrics.sMAPE.toFixed(2)}%`,  good: metrics.sMAPE < 15 },
