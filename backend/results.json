@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-23T18:24:40+05:30",
+  "generated_at": "2026-10-23T18:26:43+05:30",
   "protocol": {
     "timezone": "Asia/Kolkata",
     "target": "mean hourly load per reporting stable apartment (Wh)",
@@ -11,7 +11,7 @@
     "mase_scale": "mean absolute 24-h seasonal difference over valid training pairs",
     "best_baseline_selection": "lowest MASE on the all-four-baseline mask when it covers >=50% of evaluation hours (and >=24 h); otherwise on the evaluation mask",
     "significance": "two-sided Wilcoxon signed-rank on paired absolute errors vs the best baseline; p-values unadjusted; small_sample flags fewer than 10 pairs",
-    "learned_models": "fit on the fold's training window labels only; features at target hour t use observations at t-lag with lag >= 24 h, so all features predate the day's 00:00 IST origin; labels clipped at a train-only Q3+3*IQR cap"
+    "learned_models": "fit on the fold's training window labels only; features at target hour t use observations at t-lag with lag >= 24 h, so all features predate the day's 00:00 IST origin; reporting counts are lagged >=24 h; calendar/holiday/semester flags are known in advance; labels clipped at a train-only Q3+3*IQR cap"
   },
   "baselines": [
     "persistence",
@@ -29,7 +29,7 @@
     "xgboost"
   ],
   "learned_model_descriptions": {
-    "xgboost": "pooled direct day-ahead gradient-boosted trees on lags of 24-47, 168 and 336 h plus hour of day; trained only on the fold's training labels, clipped at the train-only outlier cap"
+    "xgboost": "pooled direct day-ahead gradient-boosted trees on lags of 24-47, 168 and 336 h, calendar/holiday/semester flags, hour of day, and lagged reporting counts; trained only on the fold's training labels, clipped at the train-only outlier cap"
   },
   "folds": [
     {
@@ -97,13 +97,13 @@
         "xgboost": {
           "status": "ok",
           "n": 744,
-          "MAE": 65.9478,
-          "RMSE": 87.3355,
-          "WAPE": 18.0987,
-          "MASE": 0.7794,
-          "bias": -1.6643,
-          "R2": 0.455537,
-          "sMAPE": 19.9221
+          "MAE": 66.4561,
+          "RMSE": 87.7973,
+          "WAPE": 18.2382,
+          "MASE": 0.7855,
+          "bias": 4.6953,
+          "R2": 0.449763,
+          "sMAPE": 20.0381
         }
       },
       "model_fit": {
@@ -156,7 +156,16 @@
             "lag24_47_std",
             "lag24_47_min",
             "lag24_47_max",
-            "hour"
+            "hour",
+            "dow",
+            "is_weekend",
+            "month",
+            "doy_sin",
+            "doy_cos",
+            "is_holiday",
+            "semester_in_session",
+            "n_reporting_lag_24",
+            "n_reporting_lag24_47_mean"
           ]
         }
       },
@@ -245,11 +254,11 @@
         },
         "xgboost": {
           "n_pairs": 744,
-          "median_abs_error_diff_wh": -6.8493,
+          "median_abs_error_diff_wh": -6.1149,
           "model_better": true,
           "small_sample": false,
-          "statistic": 115149.0,
-          "p_value": 6.499045399687475e-05,
+          "statistic": 118466.0,
+          "p_value": 0.0006074211284652995,
           "significant_at_0.05": true,
           "reason": null
         }
@@ -320,13 +329,13 @@
         "xgboost": {
           "status": "ok",
           "n": 744,
-          "MAE": 62.3457,
-          "RMSE": 82.3659,
-          "WAPE": 17.0802,
-          "MASE": 0.7665,
-          "bias": -13.5864,
-          "R2": 0.452037,
-          "sMAPE": 17.9062
+          "MAE": 61.5473,
+          "RMSE": 81.434,
+          "WAPE": 16.8615,
+          "MASE": 0.7567,
+          "bias": -19.0152,
+          "R2": 0.464366,
+          "sMAPE": 17.8002
         }
       },
       "model_fit": {
@@ -379,7 +388,16 @@
             "lag24_47_std",
             "lag24_47_min",
             "lag24_47_max",
-            "hour"
+            "hour",
+            "dow",
+            "is_weekend",
+            "month",
+            "doy_sin",
+            "doy_cos",
+            "is_holiday",
+            "semester_in_session",
+            "n_reporting_lag_24",
+            "n_reporting_lag24_47_mean"
           ]
         }
       },
@@ -468,11 +486,11 @@
         },
         "xgboost": {
           "n_pairs": 744,
-          "median_abs_error_diff_wh": 0.7831,
-          "model_better": false,
+          "median_abs_error_diff_wh": -0.9722,
+          "model_better": true,
           "small_sample": false,
-          "statistic": 130489.0,
-          "p_value": 0.1681939257670353,
+          "statistic": 133658.0,
+          "p_value": 0.4022387524133658,
           "significant_at_0.05": false,
           "reason": null
         }
@@ -543,13 +561,13 @@
         "xgboost": {
           "status": "ok",
           "n": 2243,
-          "MAE": 151.0065,
-          "RMSE": 192.4607,
-          "WAPE": 62.9529,
-          "MASE": 1.8861,
-          "bias": 69.8778,
-          "R2": 0.051525,
-          "sMAPE": 79.393
+          "MAE": 163.2192,
+          "RMSE": 208.6262,
+          "WAPE": 68.0442,
+          "MASE": 2.0387,
+          "bias": 102.2706,
+          "R2": -0.114499,
+          "sMAPE": 79.3463
         }
       },
       "model_fit": {
@@ -602,7 +620,16 @@
             "lag24_47_std",
             "lag24_47_min",
             "lag24_47_max",
-            "hour"
+            "hour",
+            "dow",
+            "is_weekend",
+            "month",
+            "doy_sin",
+            "doy_cos",
+            "is_holiday",
+            "semester_in_session",
+            "n_reporting_lag_24",
+            "n_reporting_lag24_47_mean"
           ]
         }
       },
@@ -691,11 +718,11 @@
         },
         "xgboost": {
           "n_pairs": 2243,
-          "median_abs_error_diff_wh": 10.0709,
+          "median_abs_error_diff_wh": 12.1197,
           "model_better": false,
           "small_sample": false,
-          "statistic": 1006421.5,
-          "p_value": 2.1810599128942373e-16,
+          "statistic": 973378.0,
+          "p_value": 1.5594504267700508e-20,
           "significant_at_0.05": true,
           "reason": null
         }
@@ -766,13 +793,13 @@
         "xgboost": {
           "status": "ok",
           "n": 182,
-          "MAE": 142.5857,
-          "RMSE": 183.8031,
-          "WAPE": 30.3915,
-          "MASE": 1.3887,
-          "bias": -123.8647,
-          "R2": -0.093224,
-          "sMAPE": 34.6932
+          "MAE": 100.398,
+          "RMSE": 136.1497,
+          "WAPE": 21.3994,
+          "MASE": 0.9778,
+          "bias": -58.3891,
+          "R2": 0.400158,
+          "sMAPE": 22.652
         }
       },
       "model_fit": {
@@ -825,7 +852,16 @@
             "lag24_47_std",
             "lag24_47_min",
             "lag24_47_max",
-            "hour"
+            "hour",
+            "dow",
+            "is_weekend",
+            "month",
+            "doy_sin",
+            "doy_cos",
+            "is_holiday",
+            "semester_in_session",
+            "n_reporting_lag_24",
+            "n_reporting_lag24_47_mean"
           ]
         }
       },
@@ -914,12 +950,12 @@
         },
         "xgboost": {
           "n_pairs": 182,
-          "median_abs_error_diff_wh": 11.6855,
-          "model_better": false,
+          "median_abs_error_diff_wh": -11.9493,
+          "model_better": true,
           "small_sample": false,
-          "statistic": 7515.0,
-          "p_value": 0.2541970416739031,
-          "significant_at_0.05": false,
+          "statistic": 6706.0,
+          "p_value": 0.022791249686424337,
+          "significant_at_0.05": true,
           "reason": null
         }
       }

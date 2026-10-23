@@ -15,6 +15,19 @@ import data_pipeline as dp
 # the weekly lags provide the same clock hour one and two weeks earlier.
 FEATURE_LAGS = tuple(range(24, 48)) + (168, 336)
 
+# Hand-curated major national holidays and festivals inside the data period.
+# This is a transparent approximation, not an authoritative government calendar.
+HOLIDAYS = frozenset({
+    "2016-12-25",
+    "2017-01-01", "2017-01-26", "2017-03-13", "2017-04-14", "2017-06-26",
+    "2017-08-07", "2017-08-14", "2017-08-15", "2017-09-02", "2017-09-30",
+    "2017-10-02", "2017-10-19", "2017-10-20", "2017-11-04", "2017-12-25",
+    "2018-01-01", "2018-01-26", "2018-03-02", "2018-03-30", "2018-04-30",
+})
+
+# Assumed academic terms: Jan-Apr and Jul-Nov in session, May-Jun and Dec breaks.
+SEMESTER_MONTHS = frozenset({1, 2, 3, 4, 7, 8, 9, 10, 11})
+
 DEFAULT_PARAMS = {
     "n_estimators": 400,
     "learning_rate": 0.03,
@@ -30,11 +43,12 @@ DEFAULT_PARAMS = {
 }
 
 
-def make_features(series, hours):
-    """Build lag-only features for the given target hours.
+def make_features(series, hours, reporting=None):
+    """Build lag and calendar features for the given target hours.
 
-    `hours` must be tz-aware IST timestamps. The result is indexed by `hours`.
-    Missing history stays NaN; XGBoost handles it natively at fit and predict.
+    `hours` must be tz-aware IST timestamps. Reporting counts, when supplied,
+    are also lagged by at least 24 h so they cannot reveal the forecast day.
+    Missing history stays NaN; XGBoost handles it natively.
     """
     hours = pd.DatetimeIndex(hours)
     block = {}
@@ -48,7 +62,31 @@ def make_features(series, hours):
     block["lag24_47_std"] = daily.std(axis=1).to_numpy()
     block["lag24_47_min"] = daily.min(axis=1).to_numpy()
     block["lag24_47_max"] = daily.max(axis=1).to_numpy()
-    block["hour"] = hours.hour.to_numpy(dtype=int)
+
+    local = hours.tz_convert(dp.TZ)
+    day_of_year = local.day_of_year.to_numpy(dtype=float)
+    block["hour"] = local.hour.to_numpy(dtype=int)
+    block["dow"] = local.day_of_week.to_numpy(dtype=int)
+    block["is_weekend"] = (local.day_of_week.to_numpy() >= 5).astype(int)
+    block["month"] = local.month.to_numpy(dtype=int)
+    block["doy_sin"] = np.sin(2 * np.pi * day_of_year / 365.25)
+    block["doy_cos"] = np.cos(2 * np.pi * day_of_year / 365.25)
+    block["is_holiday"] = np.array(
+        [int(day in HOLIDAYS) for day in local.strftime("%Y-%m-%d")], dtype=int
+    )
+    block["semester_in_session"] = np.array(
+        [int(month in SEMESTER_MONTHS) for month in local.month], dtype=int
+    )
+
+    if reporting is not None:
+        block["n_reporting_lag_24"] = reporting.reindex(
+            hours - pd.Timedelta(hours=24)
+        ).to_numpy(dtype=float)
+        counts = pd.DataFrame({
+            lag: reporting.reindex(hours - pd.Timedelta(hours=lag)).to_numpy(dtype=float)
+            for lag in range(24, 48)
+        })
+        block["n_reporting_lag24_47_mean"] = counts.mean(axis=1).to_numpy()
     return pd.DataFrame(block, index=hours)
 
 
@@ -56,7 +94,7 @@ def _hour_range(start, end):
     return pd.date_range(start, end, freq="h", tz=dp.TZ)
 
 
-def fit(series, train_start, train_end, params=None):
+def fit(series, train_start, train_end, params=None, reporting=None):
     """Fit one pooled model on the training window.
 
     Labels are clipped with the train-only Q3 + 3*IQR cap before fitting; the
@@ -64,7 +102,7 @@ def fit(series, train_start, train_end, params=None):
     24-h lag are dropped.
     """
     hours = _hour_range(train_start, train_end)
-    features = make_features(series, hours)
+    features = make_features(series, hours, reporting=reporting)
     labels = series.reindex(hours).astype(float)
     keep = labels.notna() & features["lag_24"].notna()
     features = features.loc[keep]
@@ -94,15 +132,20 @@ def fit(series, train_start, train_end, params=None):
     return model, metadata
 
 
-def predict(series, model, start, end):
+def predict(series, model, start, end, reporting=None):
     """Predict every hour in [start, end]; negative loads are clipped to zero."""
     hours = _hour_range(start, end)
-    features = make_features(series, hours)
+    features = make_features(series, hours, reporting=reporting)
     values = model.predict(features).astype(float)
     return pd.Series(np.maximum(values, 0.0), index=hours, name="xgboost")
 
 
-def forecast(series, train_start, train_end, test_start, test_end, params=None):
+def forecast(series, train_start, train_end, test_start, test_end, params=None,
+             reporting=None):
     """Fit on the training window and forecast the test window."""
-    model, metadata = fit(series, train_start, train_end, params=params)
-    return predict(series, model, test_start, test_end), metadata
+    model, metadata = fit(
+        series, train_start, train_end, params=params, reporting=reporting
+    )
+    return predict(
+        series, model, test_start, test_end, reporting=reporting
+    ), metadata

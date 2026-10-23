@@ -34,7 +34,7 @@ BASELINE_DESCRIPTIONS = {
 }
 
 LEARNED_MODEL_DESCRIPTIONS = {
-    "xgboost": "pooled direct day-ahead gradient-boosted trees on lags of 24-47, 168 and 336 h plus hour of day; trained only on the fold's training labels, clipped at the train-only outlier cap",
+    "xgboost": "pooled direct day-ahead gradient-boosted trees on lags of 24-47, 168 and 336 h, calendar/holiday/semester flags, hour of day, and lagged reporting counts; trained only on the fold's training labels, clipped at the train-only outlier cap",
 }
 
 FOLDS = (
@@ -79,17 +79,23 @@ PROTOCOL = {
     "mase_scale": "mean absolute 24-h seasonal difference over valid training pairs",
     "best_baseline_selection": "lowest MASE on the all-four-baseline mask when it covers >=50% of evaluation hours (and >=24 h); otherwise on the evaluation mask",
     "significance": "two-sided Wilcoxon signed-rank on paired absolute errors vs the best baseline; p-values unadjusted; small_sample flags fewer than 10 pairs",
-    "learned_models": "fit on the fold's training window labels only; features at target hour t use observations at t-lag with lag >= 24 h, so all features predate the day's 00:00 IST origin; labels clipped at a train-only Q3+3*IQR cap",
+    "learned_models": "fit on the fold's training window labels only; features at target hour t use observations at t-lag with lag >= 24 h, so all features predate the day's 00:00 IST origin; reporting counts are lagged >=24 h; calendar/holiday/semester flags are known in advance; labels clipped at a train-only Q3+3*IQR cap",
 }
+
+
+def load_target_with_reporting():
+    """Return the gap-handled target and the stable-apartment reporting count."""
+    apartments, _ = dp.load_apartments()
+    panel, _ = dp.build_panel(apartments)
+    stable, _ = dp.stable_apartments(panel)
+    target, reporting = dp.build_target(panel, stable)
+    filled, _, _, _ = dp.fill_short_gaps(target)
+    return filled, reporting
 
 
 def load_target():
     """Return the gap-handled target series (Wh per reporting apartment)."""
-    apartments, _ = dp.load_apartments()
-    panel, _ = dp.build_panel(apartments)
-    stable, _ = dp.stable_apartments(panel)
-    target, _ = dp.build_target(panel, stable)
-    filled, _, _, _ = dp.fill_short_gaps(target)
+    filled, _ = load_target_with_reporting()
     return filled
 
 
@@ -239,7 +245,7 @@ def select_best_baseline(actual, preds, eval_mask, scale):
     return best, mask_name, int(mask.sum()), selection_metrics
 
 
-def evaluate_fold(series, fold):
+def evaluate_fold(series, fold, reporting=None):
     """Score baselines and learned models on one day-ahead fold.
 
     The evaluation mask is every hour with a target value and a seasonal-naive
@@ -258,6 +264,7 @@ def evaluate_fold(series, fold):
                 fold["train_end"],
                 fold["test_start"],
                 fold["test_end"],
+                reporting=reporting,
             )
     mask = actual.notna() & preds["seasonal_naive_24"].notna()
 
@@ -310,13 +317,13 @@ def evaluate_fold(series, fold):
     }
 
 
-def run_backtest(series):
-    return [evaluate_fold(series, fold) for fold in FOLDS]
+def run_backtest(series, reporting=None):
+    return [evaluate_fold(series, fold, reporting=reporting) for fold in FOLDS]
 
 
-def build_results(series=None):
+def build_results(series=None, reporting=None):
     if series is None:
-        series = load_target()
+        series, reporting = load_target_with_reporting()
     return {
         "generated_at": pd.Timestamp.now(tz=dp.TZ).isoformat(timespec="seconds"),
         "protocol": dict(PROTOCOL),
@@ -324,7 +331,7 @@ def build_results(series=None):
         "baseline_descriptions": dict(BASELINE_DESCRIPTIONS),
         "learned_models": list(LEARNED_MODELS),
         "learned_model_descriptions": dict(LEARNED_MODEL_DESCRIPTIONS),
-        "folds": run_backtest(series),
+        "folds": run_backtest(series, reporting),
     }
 
 

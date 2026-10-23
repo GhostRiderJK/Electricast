@@ -155,6 +155,13 @@ One entry per iteration: date, item id, change, evidence, numbers.
 - Backtest (same four folds and evaluation mask): XGBoost MAE 65.95 in Jul (best baseline 75.01; paired median −6.85 Wh, p = 6.5e-05), 62.35 in Aug (best mean-of-4 58.93; +0.78 Wh, p = 0.168), 151.01 in Sep–Dec (persistence 116.21; +10.07 Wh, p = 2.2e-16), and 142.59 in May–Jun (seasonal naive 132.87; +11.69 Wh, p = 0.254). The first learned model beats the best baseline significantly only in the July fold; the autumn fold has a +69.88 Wh bias after training on May–Aug.
 - `backend/results.json` now records the XGBoost metrics, fit metadata (`n_train`, cap, number capped, params, feature list), and its paired comparison in every fold.
 
+## 2026-10-23 — 4.2 Calendar, holiday, semester and reporting features
+
+- Extended `make_features()` with day of week, weekend, month, day-of-year sine/cosine, a holiday flag, a semester-in-session flag, and two reporting-count features lagged 24 h (`n_reporting_lag_24` and the mean of the 24–47 h block). `evaluate.py` now loads the stable-apartment reporting count and passes it through fit/predict; baseline forecasts and the evaluation mask are unchanged.
+- Holiday list covers the data period (2016-12-25 through 2018-04-30) with major national holidays and festivals; the semester rule is Jan–Apr and Jul–Nov in session, May–Jun and Dec breaks. Both are documented approximations, not authoritative calendars.
+- Leakage tests grew to 8: reporting features and XGBoost predictions stay unchanged when reporting counts from the forecast day are replaced, and holiday/weekend/semester flags land on the expected dates. `python -m pytest backend/tests -q` → 8 passed.
+- Backtest: MAE 66.46 Jul (was 65.95; still beats seasonal 75.01, p = 6.1e-04), 61.55 Aug (was 62.35; 2.6 Wh behind mean-of-4, p = 0.402), 163.22 Sep–Dec (was 151.01; 47 Wh behind persistence, p = 1.6e-20), 100.40 May–Jun (was 142.59; now beats seasonal 132.87, p = 0.023). Calendar features help the year-later fold and hurt the unseen-autumn fold. The feature set is frozen here; any tuning happens on train-side CV in 4.4, not on these test folds.
+
 
 
 
