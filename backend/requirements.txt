@@ -8,3 +8,4 @@ statsmodels==0.15.0
 xgboost==3.4.1
 torch==2.14.1
 pytest==8.4.2
+optuna==5.0.0

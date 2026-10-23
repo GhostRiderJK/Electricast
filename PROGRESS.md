@@ -169,6 +169,13 @@ One entry per iteration: date, item id, change, evidence, numbers.
 - Leakage tests grew to 10: weather feature frames and XGBoost predictions stay unchanged when weather from the forecast day is replaced. `python -m pytest backend/tests -q` → 10 passed.
 - Backtest: MAE 65.69 Jul (best baseline 75.01, p = 5.6e-05), 62.24 Aug (mean-of-4 58.93, p = 0.105), 170.40 Sep–Dec (persistence 116.21, p = 1.2e-23), 106.47 May–Jun (seasonal 132.87, p = 0.254). Weather slightly helps July and hurts Sep–Dec; features stay in place and 4.4 tunes only on train-side CV.
 
+## 2026-10-23 — 4.4 Optuna tuning and early stopping
+
+- Added `time_series_splits()`, `tune()` and `_fit_tuned()`: 30 Optuna TPE trials per fold (seed 42) scored on three expanding-window CV splits inside the fold's training window; validation blocks are contiguous, non-overlapping, and end at the last training day. Early stopping (patience 25) runs on those train-side slices, and the final tree count is the median best iteration before refitting on all training labels. Optuna 5.0.0 is pinned in `requirements.txt`.
+- Tests grew to 12: CV splits stay inside the training window and never overlap, and a tuned forecast is unchanged when every value from the test-day origin onward is replaced. `python -m pytest backend/tests -q` → 12 passed (19 s).
+- Tuned backtest: XGBoost MAE 69.31 Jul (best baseline 75.01, p = 0.0215), 59.51 Aug (mean-of-4 58.93, p = 0.844), 167.27 Sep–Dec (persistence 116.21, p = 2.3e-22), 120.75 May–Jun (seasonal 132.87, p = 0.518). Tuning improved Aug (62.24 → 59.51) but worsened Jul (65.69 → 69.31) and May–Jun (106.47 → 120.75); the tuned model significantly beats the best baseline only in July.
+- Wrote `CHECKPOINT_MODELS.md` with the feature set, tuning table, fold results, iteration history, leakage evidence, and limitations.
+
 
 
 

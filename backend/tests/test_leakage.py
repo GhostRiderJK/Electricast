@@ -162,6 +162,39 @@ def test_calendar_holiday_and_semester_flags():
     assert may_features["semester_in_session"].eq(0).all()
 
 
+def test_time_series_splits_stay_inside_training_window():
+    splits = fm.time_series_splits("2017-05-01 00:00", "2017-06-30 23:00")
+    assert len(splits) == 3
+    window_start = pd.Timestamp("2017-05-01 00:00", tz=TZ)
+    window_end = pd.Timestamp("2017-06-30 23:00", tz=TZ)
+    previous_train_end = None
+    for split in splits:
+        train_start = pd.Timestamp(split["train_start"])
+        train_end = pd.Timestamp(split["train_end"])
+        val_start = pd.Timestamp(split["val_start"])
+        val_end = pd.Timestamp(split["val_end"])
+        assert train_start == window_start
+        assert train_end < val_start <= val_end <= window_end
+        if previous_train_end is not None:
+            assert train_end > previous_train_end
+        previous_train_end = train_end
+
+
+def test_tuned_fit_does_not_use_test_values():
+    series = synthetic_series()
+    args = (series, series.index[0], series.index[20 * 24 - 1])
+    before, metadata = fm.forecast(
+        *args, TEST_DAY, TEST_HOURS[-1], tune_model=True, n_trials=2
+    )
+    after, _ = fm.forecast(
+        with_future_replaced(series, TEST_DAY), *args[1:],
+        TEST_DAY, TEST_HOURS[-1], tune_model=True, n_trials=2,
+    )
+    np.testing.assert_allclose(before.to_numpy(), after.to_numpy())
+    assert metadata["tuning"]["cv_splits"]
+    assert metadata["tuning"]["best_iteration"] >= 1
+
+
 def test_xgboost_training_labels_end_before_test_start():
     series = synthetic_series()
     _, metadata = fm.fit(series, series.index[0], series.index[20 * 24 - 1])

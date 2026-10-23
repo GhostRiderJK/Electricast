@@ -267,6 +267,7 @@ def evaluate_fold(series, fold, reporting=None, weather_frame=None):
                 fold["test_end"],
                 reporting=reporting,
                 weather=weather_frame,
+                tune_model=True,
             )
     mask = actual.notna() & preds["seasonal_naive_24"].notna()
 

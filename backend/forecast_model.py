@@ -6,10 +6,13 @@ lag >= 24 h, so a forecast for any hour of day D depends only on values before
 and never sees evaluation-window targets during fitting.
 """
 import numpy as np
+import optuna
 import pandas as pd
 import xgboost as xgb
 
 import data_pipeline as dp
+
+optuna.logging.set_verbosity(optuna.logging.WARNING)
 
 # The 24-47 h block is the 24-hour window ending 24 h before the target hour;
 # the weekly lags provide the same clock hour one and two weeks earlier.
@@ -41,6 +44,12 @@ DEFAULT_PARAMS = {
     "random_state": 42,
     "n_jobs": 4,
 }
+
+TUNE_TRIALS = 30
+CV_SPLITS = 3
+CV_VAL_DAYS = 14
+EARLY_STOPPING_ROUNDS = 25
+MAX_ESTIMATORS = 800
 
 
 def make_features(series, hours, reporting=None, weather=None):
@@ -112,29 +121,213 @@ def make_features(series, hours, reporting=None, weather=None):
 
 
 def _hour_range(start, end):
-    return pd.date_range(start, end, freq="h", tz=dp.TZ)
+    start_ts = pd.Timestamp(start)
+    end_ts = pd.Timestamp(end)
+    if start_ts.tzinfo is not None:
+        return pd.date_range(start_ts, end_ts, freq="h")
+    return pd.date_range(start_ts, end_ts, freq="h", tz=dp.TZ)
 
 
-def fit(series, train_start, train_end, params=None, reporting=None,
-        weather=None):
-    """Fit one pooled model on the training window.
-
-    Labels are clipped with the train-only Q3 + 3*IQR cap before fitting; the
-    cap is fitted on training labels only. Rows without a label or without the
-    24-h lag are dropped.
-    """
-    hours = _hour_range(train_start, train_end)
+def _training_frame(series, hours, reporting=None, weather=None):
     features = make_features(series, hours, reporting=reporting, weather=weather)
     labels = series.reindex(hours).astype(float)
     keep = labels.notna() & features["lag_24"].notna()
-    features = features.loc[keep]
-    labels = labels.loc[keep]
+    return features.loc[keep], labels.loc[keep]
 
-    cap = None
-    n_capped = 0
+
+def _capped(labels):
     if len(labels) >= dp.OUTLIER_MIN_SAMPLES:
         cap = dp.fit_outlier_cap(labels)
-        labels, n_capped = dp.apply_outlier_cap(labels, cap)
+        clipped, n_capped = dp.apply_outlier_cap(labels, cap)
+        return clipped, cap, n_capped
+    return labels, None, 0
+
+
+def time_series_splits(train_start, train_end, n_splits=CV_SPLITS,
+                       val_days=CV_VAL_DAYS):
+    """Expanding-window CV splits entirely inside the training window.
+
+    Validation blocks are contiguous, non-overlapping, and end at the last
+    training day; each block's training data ends one hour before it starts.
+    """
+    start = pd.Timestamp(train_start)
+    end = pd.Timestamp(train_end)
+    if start.tzinfo is None:
+        start = start.tz_localize(dp.TZ)
+    if end.tzinfo is None:
+        end = end.tz_localize(dp.TZ)
+
+    total_days = (end.normalize() - start.normalize()).days + 1
+    effective_days = min(val_days, max(5, total_days // (n_splits + 2)))
+    splits = []
+    for i in range(n_splits):
+        val_end_day = end.normalize() - pd.Timedelta(days=i * effective_days)
+        val_start_day = val_end_day - pd.Timedelta(days=effective_days - 1)
+        split_train_end = val_start_day - pd.Timedelta(hours=1)
+        if split_train_end <= start:
+            continue
+        splits.append({
+            "train_start": str(start),
+            "train_end": str(split_train_end),
+            "val_start": str(val_start_day),
+            "val_end": str(val_end_day + pd.Timedelta(hours=23)),
+        })
+    return list(reversed(splits))
+
+
+def _sample_params(trial):
+    return {
+        "max_depth": trial.suggest_int("max_depth", 2, 6),
+        "learning_rate": trial.suggest_float(
+            "learning_rate", 0.01, 0.1, log=True
+        ),
+        "min_child_weight": trial.suggest_float(
+            "min_child_weight", 1.0, 20.0, log=True
+        ),
+        "subsample": trial.suggest_float("subsample", 0.6, 1.0),
+        "colsample_bytree": trial.suggest_float("colsample_bytree", 0.5, 1.0),
+        "reg_lambda": trial.suggest_float("reg_lambda", 0.1, 10.0, log=True),
+        "reg_alpha": trial.suggest_float("reg_alpha", 1e-3, 1.0, log=True),
+        "n_estimators": MAX_ESTIMATORS,
+        "objective": "reg:squarederror",
+        "tree_method": "hist",
+        "random_state": 42,
+        "n_jobs": 4,
+        "early_stopping_rounds": EARLY_STOPPING_ROUNDS,
+    }
+
+
+def _prepare_cv(series, splits, reporting=None, weather=None):
+    prepared = []
+    for split in splits:
+        x_train, y_train = _training_frame(
+            series,
+            _hour_range(split["train_start"], split["train_end"]),
+            reporting=reporting,
+            weather=weather,
+        )
+        y_train, _, _ = _capped(y_train)
+        x_val, y_val = _training_frame(
+            series,
+            _hour_range(split["val_start"], split["val_end"]),
+            reporting=reporting,
+            weather=weather,
+        )
+        if len(x_train) and len(x_val):
+            prepared.append((x_train, y_train, x_val, y_val))
+    return prepared
+
+
+def _cv_mae(params, prepared):
+    scores = []
+    for x_train, y_train, x_val, y_val in prepared:
+        model = xgb.XGBRegressor(**params)
+        model.fit(x_train, y_train, eval_set=[(x_val, y_val)], verbose=False)
+        pred = np.maximum(model.predict(x_val).astype(float), 0.0)
+        scores.append(float(np.mean(np.abs(pred - y_val.to_numpy(dtype=float)))))
+    return float(np.mean(scores)) if scores else float("inf")
+
+
+def tune(series, train_start, train_end, reporting=None, weather=None,
+         n_trials=TUNE_TRIALS, seed=42):
+    """Tune hyperparameters on expanding-window CV inside the training window."""
+    splits = time_series_splits(train_start, train_end)
+    if not splits:
+        raise ValueError("training window is too short for time-series CV")
+    prepared = _prepare_cv(series, splits, reporting=reporting, weather=weather)
+    if not prepared:
+        raise ValueError("no usable CV split inside the training window")
+    study = optuna.create_study(
+        direction="minimize", sampler=optuna.samplers.TPESampler(seed=seed)
+    )
+    study.optimize(
+        lambda trial: _cv_mae(_sample_params(trial), prepared),
+        n_trials=n_trials,
+    )
+    return dict(study.best_trial.params), float(study.best_value), splits
+
+
+def _fit_tuned(series, train_start, train_end, reporting=None, weather=None,
+               n_trials=TUNE_TRIALS):
+    best, cv_mae, splits = tune(
+        series, train_start, train_end, reporting=reporting, weather=weather,
+        n_trials=n_trials,
+    )
+    params = dict(best)
+    params.update({
+        "n_estimators": MAX_ESTIMATORS,
+        "objective": "reg:squarederror",
+        "tree_method": "hist",
+        "random_state": 42,
+        "n_jobs": 4,
+        "early_stopping_rounds": EARLY_STOPPING_ROUNDS,
+    })
+
+    prepared = _prepare_cv(series, splits, reporting=reporting, weather=weather)
+    best_iterations = []
+    for x_train, y_train, x_val, y_val in prepared:
+        early = xgb.XGBRegressor(**params)
+        early.fit(x_train, y_train, eval_set=[(x_val, y_val)], verbose=False)
+        best_iterations.append(int(early.best_iteration) + 1)
+    best_iteration = int(np.median(best_iterations)) if best_iterations else 200
+    best_iteration = max(1, min(best_iteration, MAX_ESTIMATORS))
+
+    x_all, y_all = _training_frame(
+        series, _hour_range(train_start, train_end),
+        reporting=reporting, weather=weather,
+    )
+    y_all, cap, n_capped = _capped(y_all)
+    final_params = {
+        key: value for key, value in params.items()
+        if key != "early_stopping_rounds"
+    }
+    final_params["n_estimators"] = best_iteration
+    model = xgb.XGBRegressor(**final_params)
+    model.fit(x_all, y_all)
+
+    metadata = {
+        "n_train": int(len(y_all)),
+        "train_start": str(train_start),
+        "train_end": str(train_end),
+        "cap_wh": None if cap is None else round(float(cap), 4),
+        "n_capped": int(n_capped),
+        "params": {
+            key: value for key, value in final_params.items() if key != "n_jobs"
+        },
+        "features": list(x_all.columns),
+        "tuning": {
+            "n_trials": int(n_trials),
+            "best_cv_mae": round(cv_mae, 4),
+            "best_params": best,
+            "cv_splits": splits,
+            "early_stopping_rounds": EARLY_STOPPING_ROUNDS,
+            "best_iterations": best_iterations,
+            "best_iteration": best_iteration,
+            "selection": "median best_iteration across the CV validation slices",
+        },
+    }
+    return model, metadata
+
+
+def fit(series, train_start, train_end, params=None, reporting=None,
+        weather=None, tune_model=False, n_trials=TUNE_TRIALS):
+    """Fit one pooled model on the training window.
+
+    With `tune_model`, Optuna selects hyperparameters on expanding-window CV
+    inside the training window, then early stopping picks the iteration count
+    on a train-side validation slice. Without it, `params`/defaults are used.
+    """
+    if tune_model:
+        return _fit_tuned(
+            series, train_start, train_end, reporting=reporting,
+            weather=weather, n_trials=n_trials,
+        )
+
+    hours = _hour_range(train_start, train_end)
+    features, labels = _training_frame(
+        series, hours, reporting=reporting, weather=weather
+    )
+    labels, cap, n_capped = _capped(labels)
 
     effective = dict(DEFAULT_PARAMS)
     if params:
@@ -165,11 +358,12 @@ def predict(series, model, start, end, reporting=None, weather=None):
 
 
 def forecast(series, train_start, train_end, test_start, test_end, params=None,
-             reporting=None, weather=None):
+             reporting=None, weather=None, tune_model=False,
+             n_trials=TUNE_TRIALS):
     """Fit on the training window and forecast the test window."""
     model, metadata = fit(
         series, train_start, train_end, params=params, reporting=reporting,
-        weather=weather,
+        weather=weather, tune_model=tune_model, n_trials=n_trials,
     )
     return predict(
         series, model, test_start, test_end, reporting=reporting, weather=weather

@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-23T18:29:01+05:30",
+  "generated_at": "2026-10-23T18:33:02+05:30",
   "protocol": {
     "timezone": "Asia/Kolkata",
     "target": "mean hourly load per reporting stable apartment (Wh)",
@@ -124,13 +124,13 @@
         "xgboost": {
           "status": "ok",
           "n": 744,
-          "MAE": 65.6931,
-          "RMSE": 87.2063,
-          "WAPE": 18.0288,
-          "MASE": 0.7764,
-          "bias": 3.4205,
-          "R2": 0.457146,
-          "sMAPE": 19.8269
+          "MAE": 69.3113,
+          "RMSE": 90.53,
+          "WAPE": 19.0218,
+          "MASE": 0.8192,
+          "bias": 5.1406,
+          "R2": 0.414978,
+          "sMAPE": 20.9199
         }
       },
       "model_fit": {
@@ -141,13 +141,14 @@
           "cap_wh": 1097.7332,
           "n_capped": 0,
           "params": {
-            "n_estimators": 400,
-            "learning_rate": 0.03,
-            "max_depth": 4,
-            "min_child_weight": 8,
-            "subsample": 0.8,
-            "colsample_bytree": 0.8,
-            "reg_lambda": 2.0,
+            "max_depth": 2,
+            "learning_rate": 0.09891081779803854,
+            "min_child_weight": 3.1415741339130285,
+            "subsample": 0.7844126801762227,
+            "colsample_bytree": 0.9747122566077923,
+            "reg_lambda": 1.660650447106849,
+            "reg_alpha": 0.08218821468070593,
+            "n_estimators": 30,
             "objective": "reg:squarederror",
             "tree_method": "hist",
             "random_state": 42
@@ -201,7 +202,48 @@
             "weather_wind_speed_10m_lag_24",
             "weather_temp_lag24_47_mean",
             "weather_precip_lag24_47_sum"
-          ]
+          ],
+          "tuning": {
+            "n_trials": 30,
+            "best_cv_mae": 82.3263,
+            "best_params": {
+              "max_depth": 2,
+              "learning_rate": 0.09891081779803854,
+              "min_child_weight": 3.1415741339130285,
+              "subsample": 0.7844126801762227,
+              "colsample_bytree": 0.9747122566077923,
+              "reg_lambda": 1.660650447106849,
+              "reg_alpha": 0.08218821468070593
+            },
+            "cv_splits": [
+              {
+                "train_start": "2017-05-01 00:00:00+05:30",
+                "train_end": "2017-05-25 23:00:00+05:30",
+                "val_start": "2017-05-26 00:00:00+05:30",
+                "val_end": "2017-06-06 23:00:00+05:30"
+              },
+              {
+                "train_start": "2017-05-01 00:00:00+05:30",
+                "train_end": "2017-06-06 23:00:00+05:30",
+                "val_start": "2017-06-07 00:00:00+05:30",
+                "val_end": "2017-06-18 23:00:00+05:30"
+              },
+              {
+                "train_start": "2017-05-01 00:00:00+05:30",
+                "train_end": "2017-06-18 23:00:00+05:30",
+                "val_start": "2017-06-19 00:00:00+05:30",
+                "val_end": "2017-06-30 23:00:00+05:30"
+              }
+            ],
+            "early_stopping_rounds": 25,
+            "best_iterations": [
+              30,
+              24,
+              30
+            ],
+            "best_iteration": 30,
+            "selection": "median best_iteration across the CV validation slices"
+          }
         }
       },
       "best_baseline": "seasonal_naive_24",
@@ -289,11 +331,11 @@
         },
         "xgboost": {
           "n_pairs": 744,
-          "median_abs_error_diff_wh": -7.5855,
+          "median_abs_error_diff_wh": -3.9993,
           "model_better": true,
           "small_sample": false,
-          "statistic": 114944.0,
-          "p_value": 5.6044242148867514e-05,
+          "statistic": 125091.0,
+          "p_value": 0.021531292043852457,
           "significant_at_0.05": true,
           "reason": null
         }
@@ -364,13 +406,13 @@
         "xgboost": {
           "status": "ok",
           "n": 744,
-          "MAE": 62.2384,
-          "RMSE": 82.4992,
-          "WAPE": 17.0508,
-          "MASE": 0.7652,
-          "bias": -20.663,
-          "R2": 0.450262,
-          "sMAPE": 18.0545
+          "MAE": 59.5095,
+          "RMSE": 80.8686,
+          "WAPE": 16.3032,
+          "MASE": 0.7316,
+          "bias": -12.8663,
+          "R2": 0.471778,
+          "sMAPE": 16.9604
         }
       },
       "model_fit": {
@@ -381,13 +423,14 @@
           "cap_wh": 1014.2504,
           "n_capped": 0,
           "params": {
-            "n_estimators": 400,
-            "learning_rate": 0.03,
-            "max_depth": 4,
-            "min_child_weight": 8,
-            "subsample": 0.8,
-            "colsample_bytree": 0.8,
-            "reg_lambda": 2.0,
+            "max_depth": 3,
+            "learning_rate": 0.013264580472641818,
+            "min_child_weight": 6.681167838456783,
+            "subsample": 0.7672903007920137,
+            "colsample_bytree": 0.7739939284090421,
+            "reg_lambda": 6.029510984178173,
+            "reg_alpha": 0.8025866852788436,
+            "n_estimators": 320,
             "objective": "reg:squarederror",
             "tree_method": "hist",
             "random_state": 42
@@ -441,7 +484,48 @@
             "weather_wind_speed_10m_lag_24",
             "weather_temp_lag24_47_mean",
             "weather_precip_lag24_47_sum"
-          ]
+          ],
+          "tuning": {
+            "n_trials": 30,
+            "best_cv_mae": 63.058,
+            "best_params": {
+              "max_depth": 3,
+              "learning_rate": 0.013264580472641818,
+              "min_child_weight": 6.681167838456783,
+              "subsample": 0.7672903007920137,
+              "colsample_bytree": 0.7739939284090421,
+              "reg_lambda": 6.029510984178173,
+              "reg_alpha": 0.8025866852788436
+            },
+            "cv_splits": [
+              {
+                "train_start": "2017-05-01 00:00:00+05:30",
+                "train_end": "2017-06-19 23:00:00+05:30",
+                "val_start": "2017-06-20 00:00:00+05:30",
+                "val_end": "2017-07-03 23:00:00+05:30"
+              },
+              {
+                "train_start": "2017-05-01 00:00:00+05:30",
+                "train_end": "2017-07-03 23:00:00+05:30",
+                "val_start": "2017-07-04 00:00:00+05:30",
+                "val_end": "2017-07-17 23:00:00+05:30"
+              },
+              {
+                "train_start": "2017-05-01 00:00:00+05:30",
+                "train_end": "2017-07-17 23:00:00+05:30",
+                "val_start": "2017-07-18 00:00:00+05:30",
+                "val_end": "2017-07-31 23:00:00+05:30"
+              }
+            ],
+            "early_stopping_rounds": 25,
+            "best_iterations": [
+              170,
+              320,
+              649
+            ],
+            "best_iteration": 320,
+            "selection": "median best_iteration across the CV validation slices"
+          }
         }
       },
       "best_baseline": "mean_last_4_same_weekdays",
@@ -529,11 +613,11 @@
         },
         "xgboost": {
           "n_pairs": 744,
-          "median_abs_error_diff_wh": 2.0847,
-          "model_better": false,
+          "median_abs_error_diff_wh": -0.152,
+          "model_better": true,
           "small_sample": false,
-          "statistic": 129066.0,
-          "p_value": 0.10508402481705559,
+          "statistic": 137416.0,
+          "p_value": 0.8439931354722782,
           "significant_at_0.05": false,
           "reason": null
         }
@@ -604,13 +688,13 @@
         "xgboost": {
           "status": "ok",
           "n": 2243,
-          "MAE": 170.4015,
-          "RMSE": 217.8272,
-          "WAPE": 71.0384,
-          "MASE": 2.1284,
-          "bias": 117.7232,
-          "R2": -0.214972,
-          "sMAPE": 79.7515
+          "MAE": 167.2714,
+          "RMSE": 212.5478,
+          "WAPE": 69.7335,
+          "MASE": 2.0893,
+          "bias": 111.151,
+          "R2": -0.156792,
+          "sMAPE": 79.4663
         }
       },
       "model_fit": {
@@ -621,13 +705,14 @@
           "cap_wh": 977.3262,
           "n_capped": 0,
           "params": {
-            "n_estimators": 400,
-            "learning_rate": 0.03,
-            "max_depth": 4,
-            "min_child_weight": 8,
-            "subsample": 0.8,
-            "colsample_bytree": 0.8,
-            "reg_lambda": 2.0,
+            "max_depth": 5,
+            "learning_rate": 0.011098534906862608,
+            "min_child_weight": 15.211993825158306,
+            "subsample": 0.7261123839232064,
+            "colsample_bytree": 0.5124600482448799,
+            "reg_lambda": 2.86323502921675,
+            "reg_alpha": 0.16994108526420312,
+            "n_estimators": 253,
             "objective": "reg:squarederror",
             "tree_method": "hist",
             "random_state": 42
@@ -681,7 +766,48 @@
             "weather_wind_speed_10m_lag_24",
             "weather_temp_lag24_47_mean",
             "weather_precip_lag24_47_sum"
-          ]
+          ],
+          "tuning": {
+            "n_trials": 30,
+            "best_cv_mae": 58.4079,
+            "best_params": {
+              "max_depth": 5,
+              "learning_rate": 0.011098534906862608,
+              "min_child_weight": 15.211993825158306,
+              "subsample": 0.7261123839232064,
+              "colsample_bytree": 0.5124600482448799,
+              "reg_lambda": 2.86323502921675,
+              "reg_alpha": 0.16994108526420312
+            },
+            "cv_splits": [
+              {
+                "train_start": "2017-05-01 00:00:00+05:30",
+                "train_end": "2017-07-20 23:00:00+05:30",
+                "val_start": "2017-07-21 00:00:00+05:30",
+                "val_end": "2017-08-03 23:00:00+05:30"
+              },
+              {
+                "train_start": "2017-05-01 00:00:00+05:30",
+                "train_end": "2017-08-03 23:00:00+05:30",
+                "val_start": "2017-08-04 00:00:00+05:30",
+                "val_end": "2017-08-17 23:00:00+05:30"
+              },
+              {
+                "train_start": "2017-05-01 00:00:00+05:30",
+                "train_end": "2017-08-17 23:00:00+05:30",
+                "val_start": "2017-08-18 00:00:00+05:30",
+                "val_end": "2017-08-31 23:00:00+05:30"
+              }
+            ],
+            "early_stopping_rounds": 25,
+            "best_iterations": [
+              284,
+              253,
+              244
+            ],
+            "best_iteration": 253,
+            "selection": "median best_iteration across the CV validation slices"
+          }
         }
       },
       "best_baseline": "persistence",
@@ -769,11 +895,11 @@
         },
         "xgboost": {
           "n_pairs": 2243,
-          "median_abs_error_diff_wh": 15.2167,
+          "median_abs_error_diff_wh": 12.3716,
           "model_better": false,
           "small_sample": false,
-          "statistic": 950894.0,
-          "p_value": 1.222379837906845e-23,
+          "statistic": 959965.0,
+          "p_value": 2.3334456876326874e-22,
           "significant_at_0.05": true,
           "reason": null
         }
@@ -844,13 +970,13 @@
         "xgboost": {
           "status": "ok",
           "n": 182,
-          "MAE": 106.471,
-          "RMSE": 143.3002,
-          "WAPE": 22.6938,
-          "MASE": 1.037,
-          "bias": -67.2666,
-          "R2": 0.335497,
-          "sMAPE": 23.8708
+          "MAE": 120.7519,
+          "RMSE": 159.5676,
+          "WAPE": 25.7377,
+          "MASE": 1.1761,
+          "bias": -87.4463,
+          "R2": 0.176065,
+          "sMAPE": 27.3974
         }
       },
       "model_fit": {
@@ -861,13 +987,14 @@
           "cap_wh": 1042.1648,
           "n_capped": 1,
           "params": {
-            "n_estimators": 400,
-            "learning_rate": 0.03,
-            "max_depth": 4,
-            "min_child_weight": 8,
-            "subsample": 0.8,
-            "colsample_bytree": 0.8,
-            "reg_lambda": 2.0,
+            "max_depth": 3,
+            "learning_rate": 0.03313703950423488,
+            "min_child_weight": 6.463387268623087,
+            "subsample": 0.9986748431261876,
+            "colsample_bytree": 0.7419020848860947,
+            "reg_lambda": 0.3781053880678847,
+            "reg_alpha": 0.8461735460507168,
+            "n_estimators": 85,
             "objective": "reg:squarederror",
             "tree_method": "hist",
             "random_state": 42
@@ -921,7 +1048,48 @@
             "weather_wind_speed_10m_lag_24",
             "weather_temp_lag24_47_mean",
             "weather_precip_lag24_47_sum"
-          ]
+          ],
+          "tuning": {
+            "n_trials": 30,
+            "best_cv_mae": 139.5457,
+            "best_params": {
+              "max_depth": 3,
+              "learning_rate": 0.03313703950423488,
+              "min_child_weight": 6.463387268623087,
+              "subsample": 0.9986748431261876,
+              "colsample_bytree": 0.7419020848860947,
+              "reg_lambda": 0.3781053880678847,
+              "reg_alpha": 0.8461735460507168
+            },
+            "cv_splits": [
+              {
+                "train_start": "2017-05-01 00:00:00+05:30",
+                "train_end": "2017-11-19 23:00:00+05:30",
+                "val_start": "2017-11-20 00:00:00+05:30",
+                "val_end": "2017-12-03 23:00:00+05:30"
+              },
+              {
+                "train_start": "2017-05-01 00:00:00+05:30",
+                "train_end": "2017-12-03 23:00:00+05:30",
+                "val_start": "2017-12-04 00:00:00+05:30",
+                "val_end": "2017-12-17 23:00:00+05:30"
+              },
+              {
+                "train_start": "2017-05-01 00:00:00+05:30",
+                "train_end": "2017-12-17 23:00:00+05:30",
+                "val_start": "2017-12-18 00:00:00+05:30",
+                "val_end": "2017-12-31 23:00:00+05:30"
+              }
+            ],
+            "early_stopping_rounds": 25,
+            "best_iterations": [
+              132,
+              85,
+              68
+            ],
+            "best_iteration": 85,
+            "selection": "median best_iteration across the CV validation slices"
+          }
         }
       },
       "best_baseline": "seasonal_naive_24",
@@ -1009,11 +1177,11 @@
         },
         "xgboost": {
           "n_pairs": 182,
-          "median_abs_error_diff_wh": -2.3319,
-          "model_better": true,
+          "median_abs_error_diff_wh": 0.2844,
+          "model_better": false,
           "small_sample": false,
-          "statistic": 7515.0,
-          "p_value": 0.2541970416739031,
+          "statistic": 7866.0,
+          "p_value": 0.517609474117629,
           "significant_at_0.05": false,
           "reason": null
         }
