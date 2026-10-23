@@ -140,6 +140,16 @@ def _build_backtest_summary(results):
     descriptions.update(results.get("learned_model_descriptions", {}))
     baselines = set(results.get("baselines", []))
 
+    def common_meta(fold):
+        common = fold.get("common_hours") or {}
+        return {
+            "n": common.get("n", 0),
+            "eval_hours": common.get("eval_hours", fold["test"]["eval_hours"]),
+            "coverage": common.get("coverage"),
+            "best_baseline": common.get("best_baseline"),
+            "missing_models": common.get("missing_models", []),
+        }
+
     fold_meta = [
         {
             "id": fold["id"],
@@ -149,6 +159,7 @@ def _build_backtest_summary(results):
             "eval_hours": fold["test"]["eval_hours"],
             "eval_days": fold["test"]["eval_days"],
             "stress_test": bool(fold.get("stress_test")),
+            "common_hours": common_meta(fold),
         }
         for fold in folds
     ]
@@ -170,6 +181,9 @@ def _build_backtest_summary(results):
             if ok and not is_reference and metrics.get("MAE") is not None \
                     and seasonal_mae is not None:
                 beats = bool(metrics["MAE"] < seasonal_mae)
+            common_metrics = (
+                (fold.get("common_hours") or {}).get("models") or {}
+            ).get(name) or {"status": "no_data", "n": 0}
             per_fold.append({
                 "id": fold["id"],
                 "status": metrics.get("status", "no_data"),
@@ -178,6 +192,14 @@ def _build_backtest_summary(results):
                 **{metric: metrics.get(metric) for metric in metric_names},
                 "beats_seasonal_naive": beats,
                 "seasonal_naive_MAE": seasonal_mae,
+                "common": {
+                    "status": common_metrics.get("status", "no_data"),
+                    "n": common_metrics.get("n", 0),
+                    **{
+                        metric: common_metrics.get(metric)
+                        for metric in metric_names
+                    },
+                },
             })
 
         scored = [row for row in per_fold if row["id"] in scoring_ids]
@@ -224,6 +246,12 @@ def _build_backtest_summary(results):
             "fold means, standard deviations, coverage and beats counts use "
             "the five scoring folds only; the stress test is shown per fold "
             "but never aggregated"
+        ),
+        "common_hours_rule": (
+            "common-hours metrics score every baseline and learned model on "
+            "the same hours: the evaluation mask intersected with all seven "
+            "models' forecasts; folds where any model has no forecasts have "
+            "no common hours and are reported as N/A"
         ),
         "fold_order": [fold["id"] for fold in folds],
         "scoring_fold_ids": [fold["id"] for fold in folds if fold["id"] in scoring_ids],

@@ -354,3 +354,23 @@ One entry per iteration: date, item id, change, evidence, numbers.
 - The pre-scoring frozen parameters helped 3/5 scoring folds and are adopted: mean MAE 102.09 vs 107.66 Wh (mean delta −5.57). Exact parameters: `max_depth=3`, `learning_rate=0.0189936`, `min_child_weight=17.4414`, `subsample=0.6232`, `colsample_bytree=0.7677`, `reg_lambda=8.2042`, `reg_alpha=0.7871`, `n_estimators=150`. The literal largest-window run remains in the artifact but is not adopted because its only meaningful gain is on test periods it trained through.
 - This is still not a December solution: 168.08 Wh versus persistence at 47.55. The 5-fold mean beats untuned but the model still has lower MAE than the best baseline on only 2/5 folds (Jun, Jul). `CHECKPOINT_PHASE9.md` records the full v1 → current → 9.3 → 9.4 → 9.5 tables and the decisions.
 - Verification: first run forced the no-calendar feature set onto the stress fold and produced 129.29 Wh there; corrected the script to apply the 9.3 rule per fold and reran, giving 112.70 Wh. Scoring folds are unchanged. `python -m pytest backend/tests -q` → **67 passed in 18.08 s**. No application code or live `results.json` changed in this item.
+
+## 2026-10-23 — 9.6 Common-hours comparison
+
+- Added `common_hours_block` to `evaluate.py` and a per-fold `common_hours` artifact block. The mask is the fold evaluation mask intersected with the forecasts of all four baselines and all three learned models; every model is scored on exactly those hours, with the common best baseline selected by the same MASE rule. Missing-model coverage and an explicit definition are stored with it; no fallback mask is used.
+- The strict intersection keeps Jun–Aug complete but costs hours elsewhere: Sep–Nov 555/1,695 (32.7%) and Dec 387/548 (70.6%), limited by SARIMA/lagged-baseline gaps. The 2018 stress fold has 0 common hours because the four-weekday baseline has no valid history after the Jan–Apr 2018 gap, so its common table is N/A.
+- MAE in Wh on common hours (common best baseline in bold):
+
+  | Fold | n | Persistence | Seasonal naive | Same hour last week | Mean of 4 weekdays | XGBoost | SARIMA | P50 |
+  |---|---:|---:|---:|---:|---:|---:|---:|---:|
+  | Jun 2017 | 720 | 222.21 | **83.06** | 125.91 | 96.64 | 73.13 | 76.64 | 72.65 |
+  | Jul 2017 | 744 | 119.56 | **75.01** | 95.00 | 86.94 | 64.98 | 65.66 | 64.56 |
+  | Aug 2017 | 744 | 105.75 | 76.31 | 74.52 | **58.93** | 60.24 | 60.60 | 60.12 |
+  | Sep–Nov 2017 | 555 | **130.92** | 180.08 | 205.79 | 158.13 | 160.99 | 112.57 | 157.94 |
+  | Dec 2017 | 387 | **48.15** | 66.06 | 179.27 | 196.67 | 186.71 | 98.43 | 191.46 |
+  | May–Jun 2018 (stress) | 0 | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
+
+- The common mask changes the Sep–Nov and Dec story relative to each model's own mask. XGBoost is 160.99 vs persistence 130.92 on the 555 common Sep–Nov hours (per-model table: 144.01 vs 138.41), and 186.71 vs 48.15 in Dec. XGBoost beats the common best baseline on 2/5 scoring folds (Jun, Jul), SARIMA on 3/5 (Jun, Jul, Sep–Nov), P50 on 2/5 (Jun, Jul); none wins Aug or Dec. The restricted comparison does not rescue the learned point models.
+- Integrated the adopted 9.5 point configuration into the evaluator while regenerating: frozen pre-scoring parameters with `n_estimators=150`, no per-fold Optuna, and the 9.3 annual-calendar rule per fold. The regenerated point-XGBoost fold MAEs are 73.13 / 64.98 / 60.24 / 144.01 / 168.08 and the five-fold mean is 102.09 Wh (was 103.46). A unit test keeps `POINT_XGB_PARAMS` byte-equal to `tuning_results.json`; quantile, SARIMA and baselines are unchanged.
+- API: each backtest-summary fold now exposes `common_hours` (`n`, `coverage`, `best_baseline`, `missing_models`) and each model's per-fold row carries a `common` metrics object; `common_hours_rule` explains the rule. Metrics page adds a "MAE on common hours" table under "MAE by fold" with the common n in each column header and N/A for the stress fold.
+- Verification: `python backend/evaluate.py` regenerated `results.json` (1.1 MB) with all six folds and the common blocks. `python -m pytest backend/tests -q` → **73 passed in 20.23s** (new hand-checked intersection/empty-intersection tests, frozen-param sync test, feature-rule test, and summary mapping tests). `python backend/scripts/check_chat.py` → 3/3 in stub mode, 16 derived values still match the new artifact. Fresh backend on :8004 and Vite on :3011: the Metrics page rendered the new table with n=720/744/744/555/387/0, Sep–Nov XGBoost 161.0 and SARIMA 112.6, Dec 186.7/98.4, and the stress column N/A; console had only Vite/React dev messages. Servers stopped afterward. `npm run build` → 49 modules, 409.66 kB (gzip 130.07 kB).

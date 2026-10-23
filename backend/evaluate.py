@@ -28,6 +28,24 @@ BASELINES = (
 )
 
 LEARNED_MODELS = ("xgboost", "sarima", "xgboost_quantile")
+ALL_MODELS = BASELINES + LEARNED_MODELS
+
+# 9.5: one Optuna study on 2016-12-14..2017-05-31, before the first scoring
+# test month, frozen across folds. Copied from tuning_results.json; a test
+# keeps the two in sync.
+POINT_XGB_PARAMS = {
+    "max_depth": 3,
+    "learning_rate": 0.01899361327091004,
+    "min_child_weight": 17.44142302645991,
+    "subsample": 0.623231219926685,
+    "colsample_bytree": 0.7677136574322302,
+    "reg_lambda": 8.204192175585105,
+    "reg_alpha": 0.7871371146811331,
+    "n_estimators": 150,
+    "objective": "reg:squarederror",
+    "tree_method": "hist",
+    "random_state": 42,
+}
 
 BASELINE_DESCRIPTIONS = {
     "persistence": "last observed value before the forecast day, held flat for 24 h",
@@ -97,6 +115,8 @@ PROTOCOL = {
     "learned_models": "xgboost is fit on the fold's training window labels only; its features at target hour t use observations at t-lag with lag >= 24 h, so all features predate the day's 00:00 IST origin; reporting counts and weather are lagged >=24 h; calendar/holiday/semester flags are known in advance; labels clipped at a train-only Q3+3*IQR cap. sarima is refit weekly on the trailing 60 days before each Monday origin and advanced daily only with actuals before the day's origin",
     "sarima": "order (1,0,1)(0,1,1,24); weekly refit on the trailing 60 days of gap-handled target; daily state updates with actuals up to each origin; recovery refit after coverage gaps",
     "quantiles": "xgboost_quantile fits one model per quantile (0.1, 0.5, 0.9) with objective reg:quantileerror on the same features, labels, and cap as xgboost; P10-P90 coverage and pinball loss are reported per fold, and P50 is also scored as a point forecast",
+    "tuning": "point xgboost uses hyperparameters frozen from one Optuna study on 2016-12-14..2017-05-31, a window that ends before the first scoring test month; the same parameters are used in every fold, with no per-fold test tuning. Annual calendar features are dropped when that fold's training span is under 365 days. The quantile models keep their fixed untuned defaults (4.6).",
+    "common_hours": "evaluation mask intersected with the forecasts of all four baselines and all three learned models, so every row in the common-hours table is scored on exactly the same hours",
 }
 
 
@@ -304,6 +324,55 @@ def select_best_baseline(actual, preds, eval_mask, scale):
     return best, mask_name, int(mask.sum()), selection_metrics
 
 
+def point_feature_options(train_start, train_end):
+    """9.3 rule: annual calendar is meaningful only with >=12 months of history."""
+    start = pd.Timestamp(train_start)
+    span = pd.Timestamp(train_end, tz=start.tz) - start
+    return {"drop_annual_calendar": bool(span < pd.Timedelta(days=365))}
+
+
+def common_hours_block(actual, preds, eval_mask, scale):
+    """Score every model on the intersection of all models' forecast hours."""
+    common = eval_mask.copy()
+    for name in ALL_MODELS:
+        common &= preds[name].notna()
+
+    models = {
+        name: compute_metrics(actual[common], preds[name][common], scale)
+        for name in ALL_MODELS
+    }
+    best, selection_mask, selection_hours, selection_metrics = \
+        select_best_baseline(actual, preds, common, scale)
+    n = int(common.sum())
+    eval_hours = int(eval_mask.sum())
+
+    return {
+        "definition": (
+            "evaluation mask intersected with the forecasts of all four "
+            "baselines and all three learned models"
+        ),
+        "n": n,
+        "eval_hours": eval_hours,
+        "coverage": _clean(n / eval_hours, 4) if eval_hours else None,
+        "models": models,
+        "best_baseline": best,
+        "selection": {
+            "mask": selection_mask,
+            "hours": selection_hours,
+            "by": "MASE",
+            "metrics": selection_metrics,
+        },
+        "hours_by_model": {
+            name: int(preds[name][eval_mask].notna().sum())
+            for name in ALL_MODELS
+        },
+        "missing_models": [
+            name for name in ALL_MODELS
+            if int(preds[name][eval_mask].notna().sum()) == 0
+        ],
+    }
+
+
 def _hourly_records(actual, preds, quantile_frame, mask):
     """Per-hour evaluation rows for the dashboard (Wh, local IST timestamps)."""
     sources = {
@@ -341,6 +410,9 @@ def evaluate_fold(series, fold, reporting=None, weather_frame=None):
     preds = baseline_forecasts(series, fold["test_start"], fold["test_end"])
     model_fit = {}
     quantile_frame = None
+    point_features = point_feature_options(
+        fold["train_start"], fold["train_end"]
+    )
     for name in LEARNED_MODELS:
         if name == "xgboost":
             preds[name], model_fit[name] = fm.forecast(
@@ -349,9 +421,11 @@ def evaluate_fold(series, fold, reporting=None, weather_frame=None):
                 fold["train_end"],
                 fold["test_start"],
                 fold["test_end"],
+                params=POINT_XGB_PARAMS,
                 reporting=reporting,
                 weather=weather_frame,
-                tune_model=True,
+                tune_model=False,
+                feature_options=point_features,
             )
         elif name == "sarima":
             preds[name], model_fit[name] = sm.forecast(
@@ -386,6 +460,7 @@ def evaluate_fold(series, fold, reporting=None, weather_frame=None):
     best, selection_mask, selection_hours, selection_metrics = select_best_baseline(
         actual, preds, mask, scale
     )
+    common = common_hours_block(actual, preds, mask, scale)
     paired = {}
     for name in models:
         if name == best:
@@ -418,6 +493,7 @@ def evaluate_fold(series, fold, reporting=None, weather_frame=None):
         },
         "mase_scale": _clean(scale, 4),
         "models": models,
+        "common_hours": common,
         "intervals": intervals,
         "hourly": _hourly_records(actual, preds, quantile_frame, mask),
         "model_fit": model_fit,
@@ -528,6 +604,14 @@ def main():
                   f"{_show(m['WAPE']):>8s} {_show(m['MASE'], 3):>7s} "
                   f"{_show(m['bias']):>8s} {_show(m['R2'], 4):>8s} "
                   f"{_show(m['sMAPE']):>8s}")
+        common = fold["common_hours"]
+        print(f"common hours: {common['n']} of {common['eval_hours']} "
+              f"({_show(common['coverage'], 3)}), best baseline "
+              f"{common['best_baseline']}, missing models "
+              f"{', '.join(common['missing_models']) or 'none'}")
+        for name in results["baselines"] + results["learned_models"]:
+            m = common["models"][name]
+            print(f"  common {name:28s} {m['n']:5d} {_show(m['MAE']):>8s}")
         for name, meta in fold["model_fit"].items():
             if "n_train" in meta:
                 print(f"fit {name}: n={meta['n_train']}, "

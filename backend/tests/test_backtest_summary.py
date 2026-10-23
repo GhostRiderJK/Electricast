@@ -10,10 +10,10 @@ if str(BACKEND) not in sys.path:
 import main  # noqa: E402
 
 
-def _metrics(mae, status="ok"):
+def _metrics(mae, status="ok", n=24):
     return {
         "status": status,
-        "n": 24 if status == "ok" else 0,
+        "n": n if status == "ok" else 0,
         "MAE": mae,
         "RMSE": mae + 1,
         "WAPE": 10.0,
@@ -37,6 +37,17 @@ def _fold(fold_id, start, end, mae, stress=False, label=None):
             "start": start, "end": end, "eval_hours": 24, "eval_days": 1,
         },
         "models": models,
+        "common_hours": {
+            "n": 12,
+            "eval_hours": 24,
+            "coverage": 0.5,
+            "best_baseline": "seasonal_naive_24",
+            "missing_models": [],
+            "models": {
+                "seasonal_naive_24": _metrics(mae + 2, n=12),
+                "xgboost": _metrics(mae + 1, n=12),
+            },
+        },
     }
 
 
@@ -64,3 +75,41 @@ def test_summary_means_exclude_stress_fold():
     assert summary["folds"][-1]["stress_test"] is True
     assert summary["folds"][-1]["label"] == "Stress test (May\u2013Jun 2018)"
     assert xgb["per_fold"][-1]["stress_test"] is True
+
+
+def test_summary_exposes_common_hours():
+    results = {
+        "folds": [
+            _fold("2017-07", "2017-07-01 00:00", "2017-07-01 23:00", 10.0),
+            _fold(
+                "2018-05_06", "2018-05-01 00:00", "2018-05-01 23:00", 500.0,
+                stress=True, label="Stress test (May\u2013Jun 2018)",
+            ),
+        ],
+    }
+    summary = main._build_backtest_summary(results)
+    xgb = next(row for row in summary["models"] if row["key"] == "xgboost")
+
+    first_fold = summary["folds"][0]
+    assert first_fold["common_hours"] == {
+        "n": 12,
+        "eval_hours": 24,
+        "coverage": 0.5,
+        "best_baseline": "seasonal_naive_24",
+        "missing_models": [],
+    }
+    assert xgb["per_fold"][0]["common"]["n"] == 12
+    assert xgb["per_fold"][0]["common"]["MAE"] == 11.0
+    assert xgb["per_fold"][1]["common"]["status"] == "ok"
+    assert "common-hours" in summary["common_hours_rule"]
+
+
+def test_summary_common_hours_default_to_no_data():
+    fold = _fold("2017-07", "2017-07-01 00:00", "2017-07-01 23:00", 10.0)
+    fold.pop("common_hours")
+    summary = main._build_backtest_summary({"folds": [fold]})
+    xgb = next(row for row in summary["models"] if row["key"] == "xgboost")
+
+    assert summary["folds"][0]["common_hours"]["n"] == 0
+    assert xgb["per_fold"][0]["common"]["status"] == "no_data"
+    assert xgb["per_fold"][0]["common"]["MAE"] is None

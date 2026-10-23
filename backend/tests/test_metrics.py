@@ -100,3 +100,74 @@ def test_history_start_is_the_first_valid_target_hour():
     assert ev.history_start(series) == "2020-01-01 01:00"
     with np.testing.assert_raises(ValueError):
         ev.history_start(pd.Series([np.nan], index=index))
+
+
+def test_frozen_point_params_match_the_95_artifact():
+    import json
+
+    artifact = json.loads(
+        (BACKEND / "tuning_results.json").read_text(encoding="utf-8")
+    )
+    frozen = artifact["tuning"]["pre_scoring"]["params"]
+    assert ev.POINT_XGB_PARAMS == frozen
+
+
+def test_point_feature_options_follow_the_twelve_month_rule():
+    short = ev.point_feature_options(
+        pd.Timestamp("2016-12-14 21:00", tz=ev.dp.TZ),
+        "2017-05-31 23:00",
+    )
+    long = ev.point_feature_options(
+        pd.Timestamp("2016-12-14 21:00", tz=ev.dp.TZ),
+        "2017-12-31 23:00",
+    )
+    assert short == {"drop_annual_calendar": True}
+    assert long == {"drop_annual_calendar": False}
+
+
+def _all_model_preds(index, values):
+    return {
+        name: pd.Series(values, index=index, dtype=float)
+        for name in ev.ALL_MODELS
+    }
+
+
+def test_common_hours_block_intersects_every_model():
+    index = pd.date_range("2021-01-01", periods=6, freq="h", tz=ev.dp.TZ)
+    actual = pd.Series([10.0, 20.0, 30.0, 40.0, 50.0, 60.0], index=index)
+    preds = _all_model_preds(index, [11.0, 22.0, 33.0, 44.0, 55.0, 66.0])
+    preds["xgboost"].iloc[0] = np.nan
+    preds["sarima"].iloc[1] = np.nan
+    preds["persistence"].iloc[2] = np.nan
+    mask = pd.Series(True, index=index)
+
+    block = ev.common_hours_block(actual, preds, mask, scale=2.0)
+
+    assert block["n"] == 3
+    assert block["eval_hours"] == 6
+    assert block["coverage"] == 0.5
+    assert block["hours_by_model"]["xgboost"] == 5
+    assert block["hours_by_model"]["sarima"] == 5
+    assert block["hours_by_model"]["persistence"] == 5
+    assert block["hours_by_model"]["seasonal_naive_24"] == 6
+    assert block["missing_models"] == []
+    for name in ev.ALL_MODELS:
+        assert block["models"][name]["n"] == 3
+        assert block["models"][name]["MAE"] == 5.0
+    assert block["best_baseline"] in ev.BASELINES
+
+
+def test_common_hours_block_reports_empty_intersection():
+    index = pd.date_range("2021-01-01", periods=4, freq="h", tz=ev.dp.TZ)
+    actual = pd.Series([10.0, 20.0, 30.0, 40.0], index=index)
+    preds = _all_model_preds(index, [11.0, 22.0, 33.0, 44.0])
+    preds["mean_last_4_same_weekdays"] = pd.Series(np.nan, index=index)
+    mask = pd.Series(True, index=index)
+
+    block = ev.common_hours_block(actual, preds, mask, scale=2.0)
+
+    assert block["n"] == 0
+    assert block["coverage"] == 0.0
+    assert block["best_baseline"] is None
+    assert block["missing_models"] == ["mean_last_4_same_weekdays"]
+    assert block["models"]["xgboost"]["status"] == "no_data"

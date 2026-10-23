@@ -233,13 +233,76 @@ export default function MetricsPage() {
         </TableShell>
       )}
 
+      {models.length > 0 && (
+        <TableShell
+          title="MAE on common hours"
+          subtitle={`Every row is scored on exactly the same hours: the evaluation mask intersected with all seven models' forecasts. ${stressFolds.length > 0 ? "A fold with no common hours, such as the stress test where a lagged baseline has no forecasts, is shown as N/A. " : ""}Compare this table with “MAE by fold” above, where each model uses its own available hours.`}
+        >
+          <table style={{ borderCollapse: "collapse",
+            fontFamily: "'IBM Plex Mono', monospace", fontSize: 12 }}>
+            <thead>
+              <tr style={{ borderBottom: "2px solid #e5e7eb" }}>
+                <th style={{ padding: "8px 10px", textAlign: "left", width: "1%",
+                  fontSize: 10, color: "#4b5563", fontWeight: 700,
+                  textTransform: "uppercase", letterSpacing: 0.5,
+                  whiteSpace: "nowrap" }}>Model</th>
+                {foldOrder.map(id => (
+                  <th key={id} style={{ padding: "8px 12px", textAlign: "right",
+                    fontSize: 10, color: "#4b5563", fontWeight: 700,
+                    textTransform: "uppercase", letterSpacing: 0.5,
+                    whiteSpace: "nowrap" }}>
+                    {foldById[id]?.label || id}
+                    <div style={{ fontSize: 9, color: "#9ca3af", fontWeight: 400,
+                      textTransform: "none", letterSpacing: 0 }}>
+                      {foldById[id]?.common_hours?.n != null
+                        ? `n=${foldById[id].common_hours.n.toLocaleString()}`
+                        : "n=0"}
+                    </div>
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {models.map(model => (
+                <tr key={model.key} style={{
+                  borderBottom: "1px solid #f3f4f6",
+                  background: model.is_reference ? "#eff6ff" : "transparent",
+                }}>
+                  <td style={{ padding: "10px 12px" }}>{model.label}</td>
+                  {foldOrder.map(id => {
+                    const row = (model.per_fold || []).find(f => f.id === id);
+                    const common = row?.common;
+                    const ok = common?.status === "ok"
+                      && Number.isFinite(common.MAE) && common.n > 0;
+                    return (
+                      <td key={id} style={{ padding: "10px 12px", textAlign: "right" }}>
+                        {ok ? (
+                          <>
+                            <div>{common.MAE.toFixed(1)}</div>
+                            <div style={{ fontSize: 9, color: "#6b7280" }}>n={common.n.toLocaleString()}</div>
+                          </>
+                        ) : (
+                          <span style={{ color: "#9ca3af" }}>N/A</span>
+                        )}
+                      </td>
+                    );
+                  })}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </TableShell>
+      )}
+
       <div style={{ fontSize: 10, color: "#4b5563",
         fontFamily: "'IBM Plex Sans', sans-serif", lineHeight: 1.6 }}>
         Fold means weight each scoring fold equally, not each hour, and exclude the
         2018 stress test. Models with partial coverage have fewer evaluable hours; the
         per-fold n shows the difference. The “beats seasonal naive” column is a
         descriptive majority rule, not a significance test; paired Wilcoxon results are
-        recorded per fold in the evaluation output.
+        recorded per fold in the evaluation output. The common-hours table removes the
+        coverage difference entirely, but it uses fewer hours in folds where a model is
+        missing.
       </div>
     </div>
   );
