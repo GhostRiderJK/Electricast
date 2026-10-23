@@ -18,10 +18,14 @@ backend/sarima_model.py      rolling weekly-refit SARIMA
 backend/weather.py           Open-Meteo archive cache (weather_mumbai.csv)
 backend/upload_validation.py upload parsing, 60/40 split, fixed-protocol evaluation
 backend/train_models.py      legacy 2017 single-split artifact (model_results.json)
+backend/config.py            assistant provider settings (Ollama/Gemini)
+backend/chat_tools.py        read-only artifact tools and deterministic question router
+backend/chat_service.py      model clients, strict prompt, numeric grounding guard
+backend/scripts/check_chat.py stub/live three-question grounding check
 
 frontend/src/pages/         8 pages (EDA, Predictions, Weekly, Metrics, Explain,
                             Data Quality, Limitations, Upload)
-frontend/src/components/    MetricsBar, DataError
+frontend/src/components/    MetricsBar, ChatDrawer, DataError
 frontend/src/hooks/useData.js
 frontend/src/utils/api.js
 frontend/src/utils/chartConfig.js
@@ -29,6 +33,13 @@ frontend/src/utils/chartConfig.js
 
 Data flow: Page → `useData()` → `api.js` → Vite proxy (`/api`) → FastAPI → JSON artifact →
 Chart.js render. In Docker, nginx proxies `/api/` to the backend, so the SPA is same-origin.
+
+The assistant is a separate path: `ChatDrawer` → `POST /api/chat` → deterministic route in
+`chat_tools.plan()` → read-only tool results from the two current artifacts → provider
+(Ollama by default, optional Gemini). The provider never sees the artifacts directly, and
+`chat_service` rejects answers containing numbers, dates, fold ids, or times absent from the
+tool packet (one retry, then 502). `GET /api/chat/status` always returns 200 so the dashboard
+works when the assistant is unavailable.
 
 Two data products, not interchangeable:
 
@@ -44,7 +55,7 @@ Two data products, not interchangeable:
 make install          # backend requirements + npm ci
 make dev-backend      # uvicorn on :8000, docs at /docs
 make dev-frontend     # Vite on :3000
-make test             # pytest backend/tests -q  (34 tests)
+make test             # pytest backend/tests -q  (52 tests)
 make build            # vite build
 make eval             # rebuild results.json (retrains models)
 make data-quality     # rebuild data_quality.json
@@ -95,6 +106,12 @@ not depend on the network or the campus CSVs.
 - The upload client uses XHR because fetch has no upload-progress event; keep the 50 MB limit
   in sync with the backend.
 - Keep `data/` read-only. Never delete or rewrite raw CSVs or committed model artifacts.
+- Assistant answers must be built from `ChatTools` output only. Do not pass raw artifacts or
+  outside facts to a provider, do not bypass the numeric guard, and do not add a provider
+  without updating `config.py`, `/api/chat/status`, and the tests.
+- The assistant is single-turn; do not imply memory of prior questions. Its guard checks
+  provenance, not semantic truth, so prefer explicit summaries/notes in tool output when a
+  field could be misread.
 
 ## Pitfalls
 
@@ -113,6 +130,10 @@ not depend on the network or the campus CSVs.
 - Docker: the backend healthcheck uses the Python standard library (no curl in the slim
   image); Linux installs `xgboost-cpu`; there is no torch/LSTM dependency. The campus data
   directory is mounted read-only at `/data`.
+- Assistant: `llama3.2:3b` is expected on a local Ollama at `127.0.0.1:11434`; no provider
+  means “Assistant unavailable”, not an error page. Docker points at
+  `host.docker.internal:11434`, which requires host Ollama to bind `0.0.0.0`. Gemini is
+  optional and was only mock-tested.
 
 See [README.md](../README.md) for the dataset and results overview and
 [RESULTS.md](../RESULTS.md) for per-fold metrics and significance tests.

@@ -232,7 +232,7 @@ Weather inputs come from the Open-Meteo archive for one Mumbai grid point (19.13
 # from the repository root
 python backend/build_data_quality.py   # writes backend/data_quality.json
 python backend/evaluate.py             # writes backend/results.json
-python -m pytest backend/tests -q      # 34 tests
+python -m pytest backend/tests -q      # 52 tests
 ```
 
 `evaluate.py` rebuilds the target, retrains XGBoost (with Optuna), quantile XGBoost, and

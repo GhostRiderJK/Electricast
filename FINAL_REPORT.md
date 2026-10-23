@@ -1,7 +1,7 @@
 # ElectriCast — Final Report
 
-**Branch:** `improve-electricast` · **Base:** `main` · **Last item commit:** `e64b89c` (7.3)
-**Status:** all PLAN items `[x]`, none `[!]` · this report is the final commit
+**Branch:** `improve-electricast` · **Base:** `main` · **Last item:** 8.1 grounded assistant
+**Status:** all PLAN items (0.1–8.1) `[x]`, none `[!]`
 **Artifacts:** `backend/results.json` (2026-10-23T19:30:48+05:30),
 `backend/data_quality.json` (2026-10-23T18:10:05+05:30)
 
@@ -20,6 +20,7 @@ rewritten, and nothing was pushed.
 | 5 — Dashboard | Fold mean ± std metrics with “beats seasonal naive?”; fold-based day picker with P10–P90 band, error by hour/month and worst days; XGBoost gain importance and residuals; Limitations panel sourced from backend JSON. |
 | 6 — Upload | Column mapping, unit/timezone/format selection, 256 KB preview, streamed 50 MB cap, IST conversion, validation report, 60/40 chronological split, Phase 3 baselines, zero-shot campus model and fit-on-60% model, paired significance, JSON download, progress/error states. |
 | 7 — Engineering | 34 pytest tests (metrics, split, leakage, gaps, upload validation); Makefile; Docker fixes (full runtime, `/data` mount, no-curl healthcheck, same-origin nginx, CPU-only XGBoost, no torch); README, RESULTS.md and copilot instructions rewritten for the current product. |
+| 8 — Assistant | “Ask ElectriCast” drawer on every page; deterministic routing to read-only artifact tools; numeric/date/time guard with one retry; local Ollama default and optional Gemini fallback; visible unavailable/loading/error states; 17 new tests and a stub/live scripted check. |
 
 ## Baselines vs models
 
@@ -56,7 +57,7 @@ against each fold's best baseline are not significant.
 
 ## Blocked items
 
-None. Every PLAN item (0.1–7.3) is marked `[x]`. No item required the `[!]` fallback, and no
+None. Every PLAN item (0.1–8.1) is marked `[x]`. No item required the `[!]` fallback, and no
 dependent item is waiting on another.
 
 ## Remaining risks
@@ -87,6 +88,11 @@ dependent item is waiting on another.
 9. **Frontend testing.** No automated frontend test runner. Pages were browser-verified against
    live backends in earlier phases and the production build passes, but regressions are not
    caught by CI.
+10. **Assistant limits.** The chat is single-turn, artifacts-only, and depends on a local
+    provider; the default `llama3.2:3b` is small and can phrase a grounded number poorly even
+    though the numeric guard blocks unsupported values. The guard checks provenance, not
+    semantics. The Docker image was not rebuilt with the chat code in this item, and the Gemini
+    path has mocked tests only (no API key on this host).
 
 ## Exact commands
 
@@ -103,8 +109,10 @@ python -m pip install -r backend/requirements.txt
 # Dashboard: http://localhost:3000   API docs: http://localhost:8000/docs
 
 # Quality gates
-python -m pytest backend/tests -q          # 34 tests
-(cd frontend && npm run build)             # 48 modules
+python -m pytest backend/tests -q          # 52 tests
+(cd frontend && npm run build)             # 49 modules
+python backend/scripts/check_chat.py       # stub-mode assistant grounding check
+python backend/scripts/check_chat.py --live  # requires Ollama or Gemini
 
 # Rebuild data-quality artifact
 python backend/build_data_quality.py       # writes backend/data_quality.json
@@ -123,8 +131,12 @@ Equivalent Make targets: `make install`, `make test`, `make build`, `make data-q
 
 ## Evidence summary
 
-- `python -m pytest backend/tests -q` → **34 passed** (18.28 s at the 7.3 documentation check).
-- `npm run build` → **48 modules**, 398.66 kB (gzip 127.20 kB).
+- `python -m pytest backend/tests -q` → **52 passed** (20.02 s at the final 8.1 check).
+- `npm run build` → **49 modules**, 407.11 kB (gzip 129.54 kB).
+- `python backend/scripts/check_chat.py` → **3/3 passed** (15 derived values cross-checked
+  against the raw artifacts); `--live` against Ollama → **3/3 passed**. Browser checks covered
+  the live answer, loading, error/retry, page persistence, Escape close, and a real
+  “Assistant unavailable” backend while the rest of the dashboard loaded.
 - Docker: isolated build succeeded after removing the unused torch/NCCL stack; backend image
   924 MB; both containers healthy; same-origin `/api` responses matched the backend; a
   7,508-row upload completed (HTTP 200, all baselines + zero-shot + fit-on-60%) and the

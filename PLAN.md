@@ -58,3 +58,6 @@ Rules: one task per iteration. Tick [x] only after the VERIFY step passes.
 - [x] 7.1 pytest suite: metrics, split, leakage, gaps
 - [x] 7.2 Makefile; Docker fixes (models/ copied, no-curl healthcheck, same-origin API)
 - [x] 7.3 README, RESULTS.md, refreshed copilot-instructions.md
+
+## Phase 8 — Grounded assistant
+- [x] 8.1 "Ask ElectriCast" chat panel: POST /api/chat with read-only artifact tools, numeric grounding guard, configurable Ollama/Gemini backend, drawer UI, tests and docs

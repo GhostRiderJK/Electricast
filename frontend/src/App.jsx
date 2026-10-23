@@ -8,6 +8,7 @@ import ExplainPage from "./pages/ExplainPage";
 import DataQualityPage from "./pages/DataQualityPage";
 import LimitationsPage from "./pages/LimitationsPage";
 import UploadPage from "./pages/UploadPage";
+import ChatDrawer from "./components/ChatDrawer";
 import "./index.css";
 
 const NAV_ITEMS = [
@@ -121,6 +122,8 @@ export default function App() {
           SARIMA · XGBoost
         </div>
       </footer>
+
+      <ChatDrawer />
     </div>
   );
 }

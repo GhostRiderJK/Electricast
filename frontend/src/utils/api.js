@@ -32,6 +32,28 @@ export const api = {
   predWeeklyPattern:  (signal) => get("/api/predictions/weekly_pattern", signal),
   predMonthlyErrors:  (signal) => get("/api/predictions/monthly_errors", signal),
 
+  chatStatus:         (signal) => get("/api/chat/status", signal),
+
+  chat: async (question) => {
+    const res = await fetch(`${BASE}/api/chat`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ question }),
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => null);
+      const error = new Error(
+        [body?.error, body?.detail].filter(Boolean).join(": ") ||
+        `API error ${res.status}: /api/chat`
+      );
+      error.status = res.status;
+      error.title = body?.error || "Assistant error";
+      error.detail = body?.detail || null;
+      throw error;
+    }
+    return res.json();
+  },
+
   uploadOptions:     (signal) => get("/api/upload/options", signal),
 
   uploadPreview: async (blob, filename) => {

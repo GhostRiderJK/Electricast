@@ -8,7 +8,7 @@ is shipped or displayed.
 
 - Backend: FastAPI, pandas, NumPy, scikit-learn, statsmodels, XGBoost
 - Frontend: React 18, Vite 5, Chart.js 4
-- Tests: pytest (34 tests)
+- Tests: pytest (52 tests)
 - Units: Wh internally; the UI labels Wh or divides by 1,000 for kWh
 - Timezone: Asia/Kolkata (IST) throughout
 
@@ -41,6 +41,41 @@ The frontend is served at http://localhost:3000 and the backend at http://localh
 `BACKEND_PORT` and `FRONTEND_PORT` override the published ports. Compose mounts `./data`
 read-only at `/data` (the upload zero-shot model reads the campus CSVs on first use) and
 mounts `backend/model_results.json` read-only.
+
+## Ask ElectriCast
+
+A collapsible drawer on every page answers questions about the saved backtest. It is
+read-only: the backend routes the question to small tools over `results.json` and
+`data_quality.json`, sends only those tool results to the model, and rejects any answer whose
+numbers/dates/times are not traceable to that packet (one retry, then HTTP 502). If the
+artifacts do not contain the answer, the answer says so; off-topic questions are refused
+without calling a model. Conversation history is not sent, and the assistant cannot see
+uploaded files or live data.
+
+Configuration lives in `backend/config.py` and can be overridden by environment variables:
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `CHAT_PROVIDER` | `auto` | `auto`, `ollama`, or `gemini` |
+| `OLLAMA_URL` | `http://127.0.0.1:11434` | local Ollama server |
+| `OLLAMA_MODEL` | `llama3.2:3b` | model tag; must already be pulled |
+| `GEMINI_API_KEY` (or `GOOGLE_API_KEY`) | unset | optional Gemini fallback |
+| `GEMINI_MODEL` | `gemini-2.5-flash` | Gemini model when a key is set |
+| `CHAT_TIMEOUT_SECONDS` | `60` | per-provider request timeout |
+
+Local default:
+
+```bash
+ollama serve
+ollama pull llama3.2:3b
+```
+
+With no reachable provider the drawer shows "Assistant unavailable" and the rest of the
+dashboard works normally. Docker Compose defaults `OLLAMA_URL` to
+`http://host.docker.internal:11434` and maps `host.docker.internal`; start the host Ollama with
+`OLLAMA_HOST=0.0.0.0` so the container can reach it (its default loopback bind is not
+reachable from another namespace). The Gemini path has mocked tests but was not live-tested on
+this host, which has no API key.
 
 Regenerate artifacts:
 
@@ -175,6 +210,8 @@ with an explicit reason instead of metrics.
 | Limitations | High-level caveats assembled from `data_quality.json` and `results.json` |
 | Upload & Validate | CSV validation and fixed-protocol evaluation |
 
+The Ask ElectriCast drawer is available on every page and is described above.
+
 ### Two data products
 
 - `backend/results.json` (Phase 3/4 backtest) + `backend/data_quality.json` back the
@@ -195,6 +232,7 @@ All data endpoints are served under `/api` and return JSON. Interactive docs at 
 | EDA (legacy) | `/api/eda/hourly`, `/daily`, `/monthly`, `/yearly`, `/heatmap`, `/weekday_vs_weekend`, `/statistics` |
 | Predictions (legacy) | `/api/predictions/monthly`, `/daily`, `/hourly`, `/weekly_pattern`, `/monthly_errors` |
 | Upload | `/api/upload/options`, `POST /preview`, `POST /validate` |
+| Assistant | `/api/chat/status`, `POST /api/chat` |
 
 ## Repository layout
 
@@ -210,11 +248,15 @@ backend/
   train_models.py         legacy 2017 single-split artifact (model_results.json)
   weather.py              Open-Meteo archive download/cache
   upload_validation.py    upload parse, split, evaluation
+  config.py               assistant provider settings
+  chat_tools.py           read-only artifact tools and deterministic router
+  chat_service.py         Ollama/Gemini clients, prompt, numeric grounding guard
+  scripts/check_chat.py   stub/live three-question grounding check
   tests/                  pytest suite
   models/                 committed XGBoost/train-stats artifacts
 frontend/src/
   pages/                  eight page components
-  components/             MetricsBar and shared inline UI
+  components/             MetricsBar, ChatDrawer, shared inline UI
   hooks/useData.js        fetch hook (loading/error/abort)
   utils/api.js            API client
   utils/chartConfig.js    Chart.js defaults and model colors
@@ -229,9 +271,18 @@ make test
 # or: python -m pytest backend/tests -q
 ```
 
-The 34 tests cover metric math and guards, the day-ahead split, lag/leakage rules, gap
-handling, and upload parsing/aggregation. They use synthetic series only and do not need the
+The 52 tests cover metric math and guards, the day-ahead split, lag/leakage rules, gap
+handling, upload parsing/aggregation, and the assistant's tool outputs, planner, numeric
+guard, retries, and provider payloads. They use synthetic series only and do not need the
 network or the campus CSVs.
+
+The scripted assistant check can run without a provider (stub answers built from tool output)
+or against the configured backend:
+
+```bash
+python backend/scripts/check_chat.py          # stub mode
+python backend/scripts/check_chat.py --live   # requires a reachable provider
+```
 
 ## Documentation
 
@@ -253,3 +304,6 @@ network or the campus CSVs.
 - P10–P90 intervals undercover in Sep–Dec (44.8%) and are only approximately calibrated.
 - Weather comes from one Open-Meteo grid point (Mumbai) and is not building-level.
 - EDA and Weekly still show the legacy 2017 aggregate and are not the backtest numbers.
+- The assistant is single-turn and artifacts-only. Its numeric guard checks provenance, not
+  semantic truth, and a small local model can still phrase a grounded number poorly; the
+  Gemini fallback has mocked coverage only.

@@ -6,14 +6,24 @@ Provides upload endpoint for validating trained models on new datasets.
 
 import os
 import json
+import threading
 import numpy as np
 import pandas as pd
 from fastapi import FastAPI, Query, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from pydantic import BaseModel, Field
 from typing import Optional
 
+import config as chat_config
 import upload_validation as uploads
+from chat_service import (
+    ChatService,
+    GroundingError,
+    ProviderError,
+    ProviderUnavailable,
+)
+from chat_tools import ChatTools, SUGGESTED_QUESTIONS
 
 app = FastAPI(
     title="Electricity Forecast API",
@@ -365,6 +375,25 @@ def load_backtest():
 
 
 load_backtest()
+
+
+_CHAT_SERVICE = None
+_CHAT_LOCK = threading.Lock()
+
+
+def _get_chat_service():
+    global _CHAT_SERVICE
+    if _CHAT_SERVICE is not None:
+        return _CHAT_SERVICE
+    if BACKTEST_RESULTS is None or QUALITY is None:
+        return None
+    with _CHAT_LOCK:
+        if _CHAT_SERVICE is None:
+            _CHAT_SERVICE = ChatService(
+                ChatTools(BACKTEST_RESULTS, QUALITY),
+                settings=chat_config,
+            )
+    return _CHAT_SERVICE
 
 
 def _no_data():
@@ -1011,6 +1040,93 @@ def monthly_errors():
     if not DATA:
         return _no_data()
     return DATA["predictions"]["monthly_errors"]
+
+
+# ─────────────────────────────────────────────────────────────────
+# Ask ElectriCast — grounded assistant over the backtest artifacts
+# ─────────────────────────────────────────────────────────────────
+
+
+class ChatRequest(BaseModel):
+    question: str = Field(default="", description="Question about the backtest artifacts")
+
+
+@app.get("/api/chat/status")
+def chat_status():
+    service = _get_chat_service()
+    if service is None:
+        return {
+            "available": False,
+            "provider": None,
+            "model": None,
+            "detail": (
+                "Backtest artifacts are not loaded. Run evaluate.py to build "
+                "results.json before using the assistant."
+            ),
+            "suggested_questions": list(SUGGESTED_QUESTIONS),
+            "sources": [],
+        }
+    try:
+        return service.status()
+    except Exception as exc:
+        return {
+            "available": False,
+            "provider": None,
+            "model": None,
+            "detail": f"Assistant status could not be checked ({type(exc).__name__}).",
+            "suggested_questions": list(SUGGESTED_QUESTIONS),
+            "sources": [],
+        }
+
+
+@app.post("/api/chat")
+def chat(request: ChatRequest):
+    service = _get_chat_service()
+    if service is None:
+        return JSONResponse(
+            status_code=503,
+            content={
+                "error": "Assistant unavailable",
+                "detail": (
+                    "Backtest artifacts are not loaded. Run evaluate.py first."
+                ),
+            },
+        )
+    try:
+        return service.ask(request.question)
+    except ValueError as exc:
+        return JSONResponse(
+            status_code=400,
+            content={"error": "Invalid question", "detail": str(exc)},
+        )
+    except ProviderUnavailable as exc:
+        return JSONResponse(
+            status_code=503,
+            content={"error": "Assistant unavailable", "detail": str(exc)},
+        )
+    except GroundingError as exc:
+        return JSONResponse(
+            status_code=502,
+            content={
+                "error": "Assistant response failed the numeric grounding check.",
+                "detail": (
+                    "Unsupported values: " + ", ".join(exc.unsupported)
+                ),
+            },
+        )
+    except ProviderError as exc:
+        return JSONResponse(
+            status_code=502,
+            content={"error": "Assistant provider failed.", "detail": str(exc)},
+        )
+    except Exception as exc:
+        return JSONResponse(
+            status_code=502,
+            content={
+                "error": "Assistant could not answer this question.",
+                "detail": type(exc).__name__,
+            },
+        )
 
 
 # ─────────────────────────────────────────────────────────────────
