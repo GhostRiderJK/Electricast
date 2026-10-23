@@ -6,6 +6,7 @@ import WeeklyPage from "./pages/WeeklyPage";
 import MetricsPage from "./pages/MetricsPage";
 import ExplainPage from "./pages/ExplainPage";
 import DataQualityPage from "./pages/DataQualityPage";
+import LimitationsPage from "./pages/LimitationsPage";
 import UploadPage from "./pages/UploadPage";
 import "./index.css";
 
@@ -16,6 +17,7 @@ const NAV_ITEMS = [
   { key: "metrics",     label: "Model Metrics",  icon: "◆" },
   { key: "explain",     label: "Explain",        icon: "◎" },
   { key: "quality",     label: "Data Quality",   icon: "▤" },
+  { key: "limitations", label: "Limitations",    icon: "⚑" },
   { key: "upload",      label: "Upload & Validate", icon: "⬆" },
 ];
 
@@ -107,6 +109,7 @@ export default function App() {
         {page === "metrics"     && <MetricsPage />}
         {page === "explain"     && <ExplainPage />}
         {page === "quality"     && <DataQualityPage />}
+        {page === "limitations" && <LimitationsPage />}
         {page === "upload"      && <UploadPage />}
       </main>
 

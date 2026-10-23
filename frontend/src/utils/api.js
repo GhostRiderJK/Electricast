@@ -18,6 +18,7 @@ export const api = {
   explainImportance:  (signal) => get("/api/explain/importance", signal),
   explainResiduals:   (fold, model, signal) => get(`/api/explain/residuals?fold=${encodeURIComponent(fold)}&model=${encodeURIComponent(model)}`, signal),
   dataQuality:        (signal) => get("/api/data_quality", signal),
+  limitations:        (signal) => get("/api/limitations", signal),
   statistics:         (signal) => get("/api/eda/statistics", signal),
   edaHourly:          (signal) => get("/api/eda/hourly", signal),
   edaDaily:           (signal) => get("/api/eda/daily", signal),

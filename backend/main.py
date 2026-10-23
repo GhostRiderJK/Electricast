@@ -17,7 +17,7 @@ from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
 
 app = FastAPI(
     title="Electricity Forecast API",
-    description="Backend for electricity demand forecasting — LSTM · SARIMA · XGBoost",
+    description="Backend for electricity demand forecasting — SARIMA · XGBoost",
     version="2.0.0",
 )
 
@@ -555,6 +555,327 @@ def get_explain_residuals(
         "by_hour": by_hour,
         "histogram": histogram,
     }
+
+
+def _build_limitations():
+    if not QUALITY or not BACKTEST_RESULTS:
+        return None
+
+    quality = QUALITY
+    source = quality.get("source") or {}
+    panel = quality.get("panel") or {}
+    stable = quality.get("stable_panel") or {}
+    target = quality.get("target") or {}
+    inactive = quality.get("inactive") or {}
+    results = BACKTEST_RESULTS
+    weather = results.get("weather") or {}
+    protocol = results.get("protocol") or {}
+
+    fold_rows = []
+    for fold in results.get("folds", []):
+        model = (fold.get("models") or {}).get("sarima") or {}
+        interval = (fold.get("intervals") or {}).get("xgboost_quantile") or {}
+        fit = (fold.get("model_fit") or {}).get("xgboost") or {}
+        fold_rows.append({
+            "id": fold["id"],
+            "label": _fold_label(fold["test"]),
+            "test_start": fold["test"]["start"],
+            "test_end": fold["test"]["end"],
+            "eval_hours": fold["test"]["eval_hours"],
+            "eval_days": fold["test"]["eval_days"],
+            "n_train_hours": fit.get("n_train"),
+            "sarima_hours": model.get("n") if model.get("status") == "ok" else 0,
+            "interval_coverage": interval.get("coverage"),
+            "interval_n": interval.get("n"),
+        })
+
+    eval_hours = sum(row["eval_hours"] for row in fold_rows)
+    eval_days = sum(row["eval_days"] for row in fold_rows)
+    sarima_hours = sum(row["sarima_hours"] for row in fold_rows)
+    coverage_rows = [row for row in fold_rows if row["interval_coverage"] is not None]
+    worst_coverage = min(coverage_rows, key=lambda row: row["interval_coverage"]) \
+        if coverage_rows else None
+    fold_2018 = next(
+        (row for row in fold_rows if str(row["test_start"]).startswith("2018")), None
+    )
+
+    longest_gap = int(target.get("longest_gap_hours") or 0)
+    longest_run = (target.get("longest_runs") or [{}])[0]
+    first_ist = pd.Timestamp(source["first_ist"]).strftime("%Y-%m-%d %H:%M") \
+        if source.get("first_ist") else "unknown"
+    last_ist = pd.Timestamp(source["last_ist"]).strftime("%Y-%m-%d %H:%M") \
+        if source.get("last_ist") else "unknown"
+    stable_count = stable.get("count")
+    apartments = panel.get("apartments")
+    flagged = inactive.get("flagged") or []
+    flagged_stable = inactive.get("flagged_stable") or []
+
+    groups = [
+        {
+            "id": "data",
+            "title": "Data scope and gaps",
+            "intro": "What the target covers, where it is missing, and which apartments enter it.",
+            "items": [
+                {
+                    "label": "Raw inputs",
+                    "value": f"{source.get('files_read', 0)} / {source.get('files_found', 0)} files read",
+                    "detail": (
+                        f"{source.get('rows_total', 0):,} rows · {first_ist} → {last_ist} IST · "
+                        f"{source.get('files_failed', 0)} failed"
+                    ),
+                    "severity": "info",
+                },
+                {
+                    "label": "Valid target hours",
+                    "value": f"{target.get('valid_hours', 0):,} h",
+                    "detail": (
+                        f"{target.get('imputed_hours', 0)} h interpolated in runs of at most "
+                        f"{target.get('max_gap_hours', 0)} h; {target.get('excluded_hours', 0):,} h "
+                        f"excluded in {target.get('excluded_runs', 0)} long or edge runs; longest "
+                        f"gap {longest_gap:,} h."
+                    ),
+                    "severity": "high",
+                },
+                {
+                    "label": "Stable panel",
+                    "value": f"{stable_count} of {apartments} apartments",
+                    "detail": (
+                        f"At least {float(stable.get('min_coverage', 0)):.0%} hourly coverage from "
+                        f"{stable.get('window_start', '?')} to {stable.get('window_end', '?')} IST."
+                    ),
+                    "severity": "medium",
+                },
+                {
+                    "label": "Zero-reporting hours",
+                    "value": f"{panel.get('hours_zero_reporting', 0):,} h",
+                    "detail": (
+                        f"Panel spans {panel.get('hours', 0):,} h; median "
+                        f"{panel.get('reporting_median', 0)} apartments reporting, maximum "
+                        f"{panel.get('reporting_max', 0)}. The target is a mean over reporting "
+                        f"stable apartments, so its cross-section changes over time."
+                    ),
+                    "severity": "medium",
+                },
+                {
+                    "label": "Suspect inactivity",
+                    "value": f"{len(flagged)} apartments",
+                    "detail": (
+                        f"{pd.Timestamp(inactive.get('month', '2017-12')).strftime('%B %Y')} mean below "
+                        f"{float(inactive.get('threshold_wh', 0)):g} Wh/h with at least "
+                        f"{inactive.get('min_hours', 0)} readings; {len(flagged_stable)} are in "
+                        f"the stable panel. Flags are descriptive and those apartments stay in "
+                        f"the target."
+                    ),
+                    "severity": "high",
+                },
+            ],
+        },
+        {
+            "id": "evaluation",
+            "title": "Evaluation protocol",
+            "intro": "The backtest is day-ahead, expanding-window, and uses only information available at each origin.",
+            "items": [
+                {
+                    "label": "Expanding folds",
+                    "value": f"{len(fold_rows)} folds · {eval_hours:,} h",
+                    "detail": (
+                        f"{' · '.join(row['label'] for row in fold_rows)}; {eval_days} evaluated "
+                        f"days in total."
+                    ),
+                    "severity": "info",
+                },
+                {
+                    "label": "Forecast horizon",
+                    "value": "24 h ahead",
+                    "detail": (
+                        "Origin 00:00 IST of each test day. Every feature is at least 24 h old "
+                        "at the target hour; there is no intraday correction and no future "
+                        "weather."
+                    ),
+                    "severity": "info",
+                },
+                {
+                    "label": "Evaluation mask",
+                    "value": f"{eval_hours:,} h",
+                    "detail": (
+                        f"{protocol.get('evaluation_mask', 'Requires the target and seasonal naive')}. "
+                        "Models with partial coverage are scored only on their available hours."
+                    ),
+                    "severity": "medium",
+                },
+                {
+                    "label": f"{fold_2018['label'] if fold_2018 else '2018'} fold",
+                    "value": f"{fold_2018['eval_hours'] if fold_2018 else 0} h",
+                    "detail": (
+                        f"Follows a {longest_gap:,} h target gap"
+                        + (f" ({pd.Timestamp(longest_run['start']).strftime('%Y-%m-%d')} → "
+                           f"{pd.Timestamp(longest_run['end']).strftime('%Y-%m-%d')})"
+                           if longest_run.get("start") and longest_run.get("end") else "")
+                        + f"; only {fold_2018['sarima_hours'] if fold_2018 else 0} h have a "
+                          f"SARIMA forecast. Treat this fold as extrapolation evidence."
+                    ),
+                    "severity": "high",
+                },
+            ],
+        },
+        {
+            "id": "models",
+            "title": "Model-specific limits",
+            "intro": "Coverage, calibration, and information constraints that differ between the models.",
+            "items": [
+                {
+                    "label": "SARIMA coverage",
+                    "value": f"{sarima_hours:,} of {eval_hours:,} h",
+                    "detail": (
+                        "Per fold: "
+                        + " / ".join(f"{row['sarima_hours']:,}" for row in fold_rows)
+                        + " h. Missing hours are not imputed or backfilled."
+                    ),
+                    "severity": "high",
+                },
+                {
+                    "label": "P10–P90 interval",
+                    "value": "80% nominal",
+                    "detail": (
+                        "Measured coverage by fold: "
+                        + " / ".join(f"{row['interval_coverage']:.1%}"
+                                      for row in coverage_rows)
+                        + (f"; worst is {worst_coverage['label']} at "
+                           f"{worst_coverage['interval_coverage']:.1%}" if worst_coverage else "")
+                        + ". Intervals are not calibrated on test folds."
+                    ),
+                    "severity": "high",
+                },
+                {
+                    "label": "Weather",
+                    "value": f"{weather.get('hours', 0):,} cached h" if weather.get(
+                        "available") else "not used",
+                    "detail": (
+                        f"Open-Meteo archive at ({weather.get('latitude')}, "
+                        f"{weather.get('longitude')}); features enter only as at least 24 h "
+                        f"lags, and evaluation reads the local cache, not the network."
+                        if weather.get("available") else
+                        "The artifact records no weather features; the backtest ran without them."
+                    ),
+                    "severity": "info",
+                },
+                {
+                    "label": "Tuning",
+                    "value": "train-only per fold",
+                    "detail": (
+                        "Optuna trials run inside each fold's training window; no test fold "
+                        "chooses a parameter, so hyperparameters differ by fold by design."
+                    ),
+                    "severity": "medium",
+                },
+                {
+                    "label": "Explainability",
+                    "value": "gain importance",
+                    "detail": (
+                        "Total split gain from the trained XGBoost booster. Correlated lag "
+                        "features can share credit; this is not a causal effect."
+                    ),
+                    "severity": "info",
+                },
+                {
+                    "label": "Deep learning",
+                    "value": "LSTM/GRU omitted",
+                    "detail": (
+                        "No validated artifact was produced, so no placeholder is shown or "
+                        "scored."
+                    ),
+                    "severity": "info",
+                },
+            ],
+        },
+    ]
+
+    caveats = [
+        {
+            "title": "Not causal",
+            "detail": (
+                "No model estimates what would happen under a policy, tariff, or appliance "
+                "change. All results are predictive associations."
+            ),
+        },
+        {
+            "title": "Single-site evidence",
+            "detail": (
+                f"{stable_count} stable apartments in one IIT Bombay residential dataset. "
+                f"There is no evidence here for other campuses, cities, or building types."
+            ),
+        },
+        {
+            "title": "Thin 2018 evidence",
+            "detail": (
+                f"The 2018 fold has {fold_2018['eval_hours'] if fold_2018 else 0} evaluable "
+                f"hours and follows a {longest_gap:,} h outage. It tests extrapolation through "
+                f"a regime shift, not normal operation."
+            ),
+        },
+        {
+            "title": "Retrospective only",
+            "detail": (
+                "This is a backtest, not a live deployment. There is no data feed, drift "
+                "monitor, retraining schedule, or on-call path."
+            ),
+        },
+        {
+            "title": "Target meaning",
+            "detail": (
+                "The target is mean Wh/h per reporting stable apartment, not total building "
+                "energy, billing, or per-capita demand."
+            ),
+        },
+        {
+            "title": "Intervals are not guarantees",
+            "detail": (
+                "P10–P90 bands are model output, not calibrated probability statements"
+                + (f"; the worst measured coverage is {worst_coverage['interval_coverage']:.1%} "
+                   f"against 80% nominal." if worst_coverage else ".")
+            ),
+        },
+        {
+            "title": "Model scope",
+            "detail": (
+                "No LSTM/GRU and no price, occupancy, or appliance-level data. Weather enters "
+                "only through lags of at least 24 h."
+            ),
+        },
+        {
+            "title": "Statistical caution",
+            "detail": (
+                "Fold means are unweighted, paired tests are unadjusted, and small samples are "
+                "flagged. A 3–4 fold mean is not a confidence interval."
+            ),
+        },
+    ]
+
+    return {
+        "generated_at": results.get("generated_at"),
+        "headline": (
+            "These are the constraints behind every number in this dashboard. Counts and "
+            "coverage figures are read from backend/data_quality.json and backend/results.json."
+        ),
+        "groups": groups,
+        "folds": fold_rows,
+        "caveats": caveats,
+        "sources": [
+            {"file": "backend/data_quality.json", "generated_at": quality.get("generated_at")},
+            {"file": "backend/results.json", "generated_at": results.get("generated_at")},
+        ],
+    }
+
+
+@app.get("/api/limitations")
+def get_limitations():
+    payload = _build_limitations()
+    if payload is None:
+        return JSONResponse(
+            status_code=503,
+            content={"error": "Limitations need data_quality.json and results.json. Run the pipeline."},
+        )
+    return payload
 
 
 @app.get("/api/data_quality")
