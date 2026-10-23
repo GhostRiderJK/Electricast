@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-23T18:45:49+05:30",
+  "generated_at": "2026-10-23T18:54:22+05:30",
   "protocol": {
     "timezone": "Asia/Kolkata",
     "target": "mean hourly load per reporting stable apartment (Wh)",
@@ -12,7 +12,8 @@
     "best_baseline_selection": "lowest MASE on the all-four-baseline mask when it covers >=50% of evaluation hours (and >=24 h); otherwise on the evaluation mask",
     "significance": "two-sided Wilcoxon signed-rank on paired absolute errors vs the best baseline; p-values unadjusted; small_sample flags fewer than 10 pairs",
     "learned_models": "xgboost is fit on the fold's training window labels only; its features at target hour t use observations at t-lag with lag >= 24 h, so all features predate the day's 00:00 IST origin; reporting counts and weather are lagged >=24 h; calendar/holiday/semester flags are known in advance; labels clipped at a train-only Q3+3*IQR cap. sarima is refit weekly on the trailing 60 days before each Monday origin and advanced daily only with actuals before the day's origin",
-    "sarima": "order (1,0,1)(0,1,1,24); weekly refit on the trailing 60 days of gap-handled target; daily state updates with actuals up to each origin; recovery refit after coverage gaps"
+    "sarima": "order (1,0,1)(0,1,1,24); weekly refit on the trailing 60 days of gap-handled target; daily state updates with actuals up to each origin; recovery refit after coverage gaps",
+    "quantiles": "xgboost_quantile fits one model per quantile (0.1, 0.5, 0.9) with objective reg:quantileerror on the same features, labels, and cap as xgboost; P10-P90 coverage and pinball loss are reported per fold, and P50 is also scored as a point forecast"
   },
   "baselines": [
     "persistence",
@@ -28,11 +29,13 @@
   },
   "learned_models": [
     "xgboost",
-    "sarima"
+    "sarima",
+    "xgboost_quantile"
   ],
   "learned_model_descriptions": {
     "xgboost": "pooled direct day-ahead gradient-boosted trees on lags of 24-47, 168 and 336 h, calendar/holiday/semester flags, hour of day, lagged reporting counts, and lagged Mumbai weather; trained only on the fold's training labels, clipped at the train-only outlier cap",
-    "sarima": "SARIMA(1,0,1)(0,1,1,24) on the gap-handled target, refit weekly on the trailing 60 days before each Monday origin and advanced daily with actuals up to each day's origin"
+    "sarima": "SARIMA(1,0,1)(0,1,1,24) on the gap-handled target, refit weekly on the trailing 60 days before each Monday origin and advanced daily with actuals up to each day's origin",
+    "xgboost_quantile": "three XGBoost quantile models (P10/P50/P90) on the same features, training window, and train-only cap as the point XGBoost; fixed untuned hyperparameters; predictions clipped at zero and rearranged so quantiles do not cross"
   },
   "weather": {
     "available": true,
@@ -145,6 +148,29 @@
           "bias": 7.8866,
           "R2": 0.451014,
           "sMAPE": 19.9662
+        },
+        "xgboost_quantile": {
+          "status": "ok",
+          "n": 744,
+          "MAE": 65.9935,
+          "RMSE": 87.8334,
+          "WAPE": 18.1112,
+          "MASE": 0.78,
+          "bias": -1.4824,
+          "R2": 0.449311,
+          "sMAPE": 19.8769
+        }
+      },
+      "intervals": {
+        "xgboost_quantile": {
+          "status": "ok",
+          "n": 744,
+          "coverage": 0.7164,
+          "mean_width_wh": 177.4363,
+          "pinball_10": 17.1417,
+          "pinball_50": 32.9968,
+          "pinball_90": 15.0506,
+          "pinball_mean": 21.7297
         }
       },
       "model_fit": {
@@ -287,6 +313,80 @@
           "predicted_hours": 744,
           "nan_hours": 0,
           "refit_policy": "Mondays and first test day; recovery refit after coverage gaps"
+        },
+        "xgboost_quantile": {
+          "quantiles": [
+            0.1,
+            0.5,
+            0.9
+          ],
+          "n_train": 1464,
+          "train_start": "2017-05-01 00:00",
+          "train_end": "2017-06-30 23:00",
+          "cap_wh": 1097.7332,
+          "n_capped": 0,
+          "params": {
+            "n_estimators": 400,
+            "learning_rate": 0.03,
+            "max_depth": 4,
+            "min_child_weight": 8,
+            "subsample": 0.8,
+            "colsample_bytree": 0.8,
+            "reg_lambda": 2.0,
+            "tree_method": "hist",
+            "random_state": 42
+          },
+          "features": [
+            "lag_24",
+            "lag_25",
+            "lag_26",
+            "lag_27",
+            "lag_28",
+            "lag_29",
+            "lag_30",
+            "lag_31",
+            "lag_32",
+            "lag_33",
+            "lag_34",
+            "lag_35",
+            "lag_36",
+            "lag_37",
+            "lag_38",
+            "lag_39",
+            "lag_40",
+            "lag_41",
+            "lag_42",
+            "lag_43",
+            "lag_44",
+            "lag_45",
+            "lag_46",
+            "lag_47",
+            "lag_168",
+            "lag_336",
+            "lag24_47_mean",
+            "lag24_47_std",
+            "lag24_47_min",
+            "lag24_47_max",
+            "hour",
+            "dow",
+            "is_weekend",
+            "month",
+            "doy_sin",
+            "doy_cos",
+            "is_holiday",
+            "semester_in_session",
+            "n_reporting_lag_24",
+            "n_reporting_lag24_47_mean",
+            "weather_temperature_2m_lag_24",
+            "weather_relative_humidity_2m_lag_24",
+            "weather_apparent_temperature_lag_24",
+            "weather_precipitation_lag_24",
+            "weather_cloud_cover_lag_24",
+            "weather_wind_speed_10m_lag_24",
+            "weather_temp_lag24_47_mean",
+            "weather_precip_lag24_47_sum"
+          ],
+          "n_quantile_crossings": 0
         }
       },
       "best_baseline": "seasonal_naive_24",
@@ -391,6 +491,16 @@
           "p_value": 0.00012044536324242556,
           "significant_at_0.05": true,
           "reason": null
+        },
+        "xgboost_quantile": {
+          "n_pairs": 744,
+          "median_abs_error_diff_wh": -7.2484,
+          "model_better": true,
+          "small_sample": false,
+          "statistic": 115121.0,
+          "p_value": 6.369340016695138e-05,
+          "significant_at_0.05": true,
+          "reason": null
         }
       }
     },
@@ -477,6 +587,29 @@
           "bias": -6.5316,
           "R2": 0.468568,
           "sMAPE": 17.3103
+        },
+        "xgboost_quantile": {
+          "status": "ok",
+          "n": 744,
+          "MAE": 60.5826,
+          "RMSE": 82.0614,
+          "WAPE": 16.5972,
+          "MASE": 0.7448,
+          "bias": -15.2283,
+          "R2": 0.456081,
+          "sMAPE": 17.2965
+        }
+      },
+      "intervals": {
+        "xgboost_quantile": {
+          "status": "ok",
+          "n": 744,
+          "coverage": 0.7849,
+          "mean_width_wh": 176.7546,
+          "pinball_10": 13.5826,
+          "pinball_50": 30.2913,
+          "pinball_90": 15.732,
+          "pinball_mean": 19.8686
         }
       },
       "model_fit": {
@@ -618,6 +751,80 @@
           "predicted_hours": 744,
           "nan_hours": 0,
           "refit_policy": "Mondays and first test day; recovery refit after coverage gaps"
+        },
+        "xgboost_quantile": {
+          "quantiles": [
+            0.1,
+            0.5,
+            0.9
+          ],
+          "n_train": 2208,
+          "train_start": "2017-05-01 00:00",
+          "train_end": "2017-07-31 23:00",
+          "cap_wh": 1014.2504,
+          "n_capped": 0,
+          "params": {
+            "n_estimators": 400,
+            "learning_rate": 0.03,
+            "max_depth": 4,
+            "min_child_weight": 8,
+            "subsample": 0.8,
+            "colsample_bytree": 0.8,
+            "reg_lambda": 2.0,
+            "tree_method": "hist",
+            "random_state": 42
+          },
+          "features": [
+            "lag_24",
+            "lag_25",
+            "lag_26",
+            "lag_27",
+            "lag_28",
+            "lag_29",
+            "lag_30",
+            "lag_31",
+            "lag_32",
+            "lag_33",
+            "lag_34",
+            "lag_35",
+            "lag_36",
+            "lag_37",
+            "lag_38",
+            "lag_39",
+            "lag_40",
+            "lag_41",
+            "lag_42",
+            "lag_43",
+            "lag_44",
+            "lag_45",
+            "lag_46",
+            "lag_47",
+            "lag_168",
+            "lag_336",
+            "lag24_47_mean",
+            "lag24_47_std",
+            "lag24_47_min",
+            "lag24_47_max",
+            "hour",
+            "dow",
+            "is_weekend",
+            "month",
+            "doy_sin",
+            "doy_cos",
+            "is_holiday",
+            "semester_in_session",
+            "n_reporting_lag_24",
+            "n_reporting_lag24_47_mean",
+            "weather_temperature_2m_lag_24",
+            "weather_relative_humidity_2m_lag_24",
+            "weather_apparent_temperature_lag_24",
+            "weather_precipitation_lag_24",
+            "weather_cloud_cover_lag_24",
+            "weather_wind_speed_10m_lag_24",
+            "weather_temp_lag24_47_mean",
+            "weather_precip_lag24_47_sum"
+          ],
+          "n_quantile_crossings": 0
         }
       },
       "best_baseline": "mean_last_4_same_weekdays",
@@ -722,6 +929,16 @@
           "p_value": 0.8300060972164037,
           "significant_at_0.05": false,
           "reason": null
+        },
+        "xgboost_quantile": {
+          "n_pairs": 744,
+          "median_abs_error_diff_wh": 0.0001,
+          "model_better": false,
+          "small_sample": false,
+          "statistic": 135553.0,
+          "p_value": 0.60691604122612,
+          "significant_at_0.05": false,
+          "reason": null
         }
       }
     },
@@ -808,6 +1025,29 @@
           "bias": 8.1369,
           "R2": 0.4764,
           "sMAPE": 70.1792
+        },
+        "xgboost_quantile": {
+          "status": "ok",
+          "n": 2243,
+          "MAE": 159.141,
+          "RMSE": 202.7253,
+          "WAPE": 66.3441,
+          "MASE": 1.9877,
+          "bias": 93.0692,
+          "R2": -0.052344,
+          "sMAPE": 79.0707
+        }
+      },
+      "intervals": {
+        "xgboost_quantile": {
+          "status": "ok",
+          "n": 2243,
+          "coverage": 0.4481,
+          "mean_width_wh": 210.7581,
+          "pinball_10": 75.6834,
+          "pinball_50": 79.5705,
+          "pinball_90": 30.3942,
+          "pinball_mean": 61.8827
         }
       },
       "model_fit": {
@@ -962,6 +1202,80 @@
           "predicted_hours": 1800,
           "nan_hours": 1128,
           "refit_policy": "Mondays and first test day; recovery refit after coverage gaps"
+        },
+        "xgboost_quantile": {
+          "quantiles": [
+            0.1,
+            0.5,
+            0.9
+          ],
+          "n_train": 2952,
+          "train_start": "2017-05-01 00:00",
+          "train_end": "2017-08-31 23:00",
+          "cap_wh": 977.3262,
+          "n_capped": 0,
+          "params": {
+            "n_estimators": 400,
+            "learning_rate": 0.03,
+            "max_depth": 4,
+            "min_child_weight": 8,
+            "subsample": 0.8,
+            "colsample_bytree": 0.8,
+            "reg_lambda": 2.0,
+            "tree_method": "hist",
+            "random_state": 42
+          },
+          "features": [
+            "lag_24",
+            "lag_25",
+            "lag_26",
+            "lag_27",
+            "lag_28",
+            "lag_29",
+            "lag_30",
+            "lag_31",
+            "lag_32",
+            "lag_33",
+            "lag_34",
+            "lag_35",
+            "lag_36",
+            "lag_37",
+            "lag_38",
+            "lag_39",
+            "lag_40",
+            "lag_41",
+            "lag_42",
+            "lag_43",
+            "lag_44",
+            "lag_45",
+            "lag_46",
+            "lag_47",
+            "lag_168",
+            "lag_336",
+            "lag24_47_mean",
+            "lag24_47_std",
+            "lag24_47_min",
+            "lag24_47_max",
+            "hour",
+            "dow",
+            "is_weekend",
+            "month",
+            "doy_sin",
+            "doy_cos",
+            "is_holiday",
+            "semester_in_session",
+            "n_reporting_lag_24",
+            "n_reporting_lag24_47_mean",
+            "weather_temperature_2m_lag_24",
+            "weather_relative_humidity_2m_lag_24",
+            "weather_apparent_temperature_lag_24",
+            "weather_precipitation_lag_24",
+            "weather_cloud_cover_lag_24",
+            "weather_wind_speed_10m_lag_24",
+            "weather_temp_lag24_47_mean",
+            "weather_precip_lag24_47_sum"
+          ],
+          "n_quantile_crossings": 0
         }
       },
       "best_baseline": "persistence",
@@ -1066,6 +1380,16 @@
           "p_value": 0.0029096753497054612,
           "significant_at_0.05": true,
           "reason": null
+        },
+        "xgboost_quantile": {
+          "n_pairs": 2243,
+          "median_abs_error_diff_wh": 10.9199,
+          "model_better": false,
+          "small_sample": false,
+          "statistic": 982643.0,
+          "p_value": 2.544514911518497e-19,
+          "significant_at_0.05": true,
+          "reason": null
         }
       }
     },
@@ -1152,6 +1476,29 @@
           "bias": -35.2077,
           "R2": 0.709403,
           "sMAPE": 24.0919
+        },
+        "xgboost_quantile": {
+          "status": "ok",
+          "n": 182,
+          "MAE": 113.9394,
+          "RMSE": 150.1297,
+          "WAPE": 24.2856,
+          "MASE": 1.1097,
+          "bias": -78.6113,
+          "R2": 0.270649,
+          "sMAPE": 25.9929
+        }
+      },
+      "intervals": {
+        "xgboost_quantile": {
+          "status": "ok",
+          "n": 182,
+          "coverage": 0.6923,
+          "mean_width_wh": 229.0521,
+          "pinball_10": 19.7165,
+          "pinball_50": 56.9697,
+          "pinball_90": 29.0735,
+          "pinball_mean": 35.2533
         }
       },
       "model_fit": {
@@ -1291,6 +1638,80 @@
           "predicted_hours": 96,
           "nan_hours": 744,
           "refit_policy": "Mondays and first test day; recovery refit after coverage gaps"
+        },
+        "xgboost_quantile": {
+          "quantiles": [
+            0.1,
+            0.5,
+            0.9
+          ],
+          "n_train": 5195,
+          "train_start": "2017-05-01 00:00",
+          "train_end": "2017-12-31 23:00",
+          "cap_wh": 1042.1648,
+          "n_capped": 1,
+          "params": {
+            "n_estimators": 400,
+            "learning_rate": 0.03,
+            "max_depth": 4,
+            "min_child_weight": 8,
+            "subsample": 0.8,
+            "colsample_bytree": 0.8,
+            "reg_lambda": 2.0,
+            "tree_method": "hist",
+            "random_state": 42
+          },
+          "features": [
+            "lag_24",
+            "lag_25",
+            "lag_26",
+            "lag_27",
+            "lag_28",
+            "lag_29",
+            "lag_30",
+            "lag_31",
+            "lag_32",
+            "lag_33",
+            "lag_34",
+            "lag_35",
+            "lag_36",
+            "lag_37",
+            "lag_38",
+            "lag_39",
+            "lag_40",
+            "lag_41",
+            "lag_42",
+            "lag_43",
+            "lag_44",
+            "lag_45",
+            "lag_46",
+            "lag_47",
+            "lag_168",
+            "lag_336",
+            "lag24_47_mean",
+            "lag24_47_std",
+            "lag24_47_min",
+            "lag24_47_max",
+            "hour",
+            "dow",
+            "is_weekend",
+            "month",
+            "doy_sin",
+            "doy_cos",
+            "is_holiday",
+            "semester_in_session",
+            "n_reporting_lag_24",
+            "n_reporting_lag24_47_mean",
+            "weather_temperature_2m_lag_24",
+            "weather_relative_humidity_2m_lag_24",
+            "weather_apparent_temperature_lag_24",
+            "weather_precipitation_lag_24",
+            "weather_cloud_cover_lag_24",
+            "weather_wind_speed_10m_lag_24",
+            "weather_temp_lag24_47_mean",
+            "weather_precip_lag24_47_sum"
+          ],
+          "n_quantile_crossings": 1
         }
       },
       "best_baseline": "seasonal_naive_24",
@@ -1394,6 +1815,16 @@
           "statistic": 217.0,
           "p_value": 0.02529872478771722,
           "significant_at_0.05": true,
+          "reason": null
+        },
+        "xgboost_quantile": {
+          "n_pairs": 182,
+          "median_abs_error_diff_wh": -3.5197,
+          "model_better": true,
+          "small_sample": false,
+          "statistic": 7602.0,
+          "p_value": 0.3086906980010885,
+          "significant_at_0.05": false,
           "reason": null
         }
       }

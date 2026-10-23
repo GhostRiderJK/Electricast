@@ -1,6 +1,6 @@
-# Models checkpoint — through item 4.5
+# Models checkpoint — through item 4.6
 
-Generated from `backend/results.json` (run 2026-10-23, after item 4.5). Regenerate
+Generated from `backend/results.json` (run 2026-10-23, after item 4.6). Regenerate
 from the repo root with:
 
 ```bash
@@ -9,8 +9,8 @@ python backend/evaluate.py
 
 This runs the full day-ahead backtest (four expanding folds) and overwrites
 `backend/results.json`. It reads the raw CSVs and the committed weather cache; it
-does not touch the network. The full run takes about 2–3 minutes on this machine,
-most of it Optuna tuning and SARIMA refits.
+does not touch the network. The full run takes about 5 minutes on this machine,
+most of it Optuna tuning, SARIMA refits, and quantile fits.
 
 ## Protocol recap
 
@@ -21,8 +21,9 @@ most of it Optuna tuning and SARIMA refits.
 - Baselines: persistence, seasonal naive 24 h, same hour last week, mean of the
   same hour on the previous four same weekdays.
 - Learned models: one pooled XGBoost per fold, trained only on that fold's training
-  window labels, and one rolling SARIMA per fold, refit weekly from pre-origin
-  actuals. Neither reads test-window labels.
+  window labels; one rolling SARIMA per fold, refit weekly from pre-origin actuals;
+  and three quantile XGBoost models (P10/P50/P90) on the same information set.
+  None reads test-window labels.
 
 ## Feature set (XGBoost)
 
@@ -77,18 +78,34 @@ clipped at a train-only Q3 + 3×IQR cap; predictions are clipped at zero.
   four folds. The rest are hours where a gap left no sufficiently fresh,
   sufficiently long history.
 
+## Quantile configuration
+
+- Three independent XGBoost regressors with `objective=reg:quantileerror` at
+  quantiles 0.1, 0.5, and 0.9.
+- Same features, 24 h+ lags, training window, and train-only Q3 + 3×IQR cap as the
+  point XGBoost model; fixed untuned 4.1 defaults (400 trees, depth 4, learning
+  rate 0.03).
+- Predictions are clipped at zero, then sorted row-wise so the quantiles cannot
+  cross. Raw crossings were 0 / 0 / 0 / 1 rows in the four folds.
+- Interval quality is measured by P10–P90 coverage (nominal 80%), mean width, and
+  pinball loss at each quantile. P50 is also scored as a point forecast.
+
 ## Fold results (evaluation mask)
 
 | Fold | Model | n | MAE | RMSE | WAPE % | MASE | Bias | R² | Best baseline (MAE) | Median abs-error diff | p |
 |---|---|---:|---:|---:|---:|---:|---:|---:|---|---:|---:|
 | 2017-07 | xgboost | 744 | 69.31 | 90.53 | 19.02 | 0.819 | 5.14 | 0.4150 | seasonal naive (75.01) | −4.00 | 0.0215 |
 | 2017-07 | sarima | 744 | 65.66 | 87.70 | 18.02 | 0.776 | 7.89 | 0.4510 | seasonal naive (75.01) | −6.61 | 0.00012 |
+| 2017-07 | xgboost_quantile (P50) | 744 | 65.99 | 87.83 | 18.11 | 0.780 | −1.48 | 0.4493 | seasonal naive (75.01) | −7.25 | 6.4e-05 |
 | 2017-08 | xgboost | 744 | 59.51 | 80.87 | 16.30 | 0.732 | −12.87 | 0.4718 | mean of 4 weekdays (58.93) | −0.15 | 0.844 |
 | 2017-08 | sarima | 744 | 60.60 | 81.11 | 16.60 | 0.745 | −6.53 | 0.4686 | mean of 4 weekdays (58.93) | +0.42 | 0.830 |
+| 2017-08 | xgboost_quantile (P50) | 744 | 60.58 | 82.06 | 16.60 | 0.745 | −15.23 | 0.4561 | mean of 4 weekdays (58.93) | 0.00 | 0.607 |
 | 2017-09_12 | xgboost | 2,243 | 167.27 | 212.55 | 69.73 | 2.089 | 111.15 | −0.1568 | persistence (116.21) | +12.37 | 2.3e-22 |
 | 2017-09_12 | sarima | 1,554 | 104.23 | 146.99 | 44.17 | 1.302 | 8.14 | 0.4764 | persistence (116.21) | −0.43 | 0.0029 |
+| 2017-09_12 | xgboost_quantile (P50) | 2,243 | 159.14 | 202.73 | 66.34 | 1.988 | 93.07 | −0.0523 | persistence (116.21) | +10.92 | 2.5e-19 |
 | 2018-05_06 | xgboost | 182 | 120.75 | 159.57 | 25.74 | 1.176 | −87.45 | 0.1761 | seasonal naive (132.87) | +0.28 | 0.518 |
 | 2018-05_06 | sarima | 38 | 93.80 | 127.08 | 17.53 | 0.914 | −35.21 | 0.7094 | seasonal naive (132.87) | −9.36 | 0.025 |
+| 2018-05_06 | xgboost_quantile (P50) | 182 | 113.94 | 150.13 | 24.29 | 1.110 | −78.61 | 0.2706 | seasonal naive (132.87) | −3.52 | 0.309 |
 
 Negative median abs-error diff means the model has the lower median absolute error.
 Only the July fold shows a statistically significant XGBoost improvement over the
@@ -96,7 +113,23 @@ best baseline; August is a statistical tie, and Sep–Dec is significantly worse
 SARIMA is statistically better in July and on its overlapping Sep–Dec hours, but
 the Sep–Dec median difference is only −0.43 Wh, and its 2018 p-value rests on 38
 paired hours. SARIMA has fewer evaluable hours than XGBoost in the last two folds,
-so their MAEs are not computed over identical hours.
+so their MAEs are not computed over identical hours. The quantile P50 is
+significantly better than the best baseline only in July.
+
+## Interval quality (quantile XGBoost)
+
+| Fold | Coverage (nominal 80%) | Mean width (Wh) | Pinball P10 | Pinball P50 | Pinball P90 | Mean pinball |
+|---|---:|---:|---:|---:|---:|---:|
+| 2017-07 | 71.6% | 177.44 | 17.14 | 33.00 | 15.05 | 21.73 |
+| 2017-08 | 78.5% | 176.75 | 13.58 | 30.29 | 15.73 | 19.87 |
+| 2017-09_12 | 44.8% | 210.76 | 75.68 | 79.57 | 30.39 | 61.88 |
+| 2018-05_06 | 69.2% | 229.05 | 19.72 | 56.97 | 29.07 | 35.25 |
+
+Coverage is measured on the same evaluation mask and hours as the P50 point
+metrics. The intervals are too narrow in every fold and badly undercovered in the
+autumn shift, where the model trained on May–Aug never saw the December vacancy
+regime. The pinball loss reflects that miss; no test-window recalibration was
+applied.
 
 ## What changed across model iterations
 
@@ -116,7 +149,7 @@ tuning. The feature set was not edited in response to test results.
 
 ## Leakage evidence
 
-`python -m pytest backend/tests -q` → 15 passed. Tests cover:
+`python -m pytest backend/tests -q` → 17 passed. Tests cover:
 
 - every feature lag is ≥24 h;
 - feature frames for a test day are unchanged when every value from that day's
@@ -125,6 +158,8 @@ tuning. The feature set was not edited in response to test results.
   mutation;
 - SARIMA contiguous history stops at the last gap, rejects runs under 7 days, and
   emits nothing from a state older than 48 h;
+- quantile predictions are unchanged under the same mutation, stay ordered, and a
+  hand-checked coverage/pinball example matches the formulas;
 - a tuned XGBoost forecast is unchanged when test-window values are replaced;
 - time-series CV splits stay inside the training window and never overlap;
 - holiday/weekend/semester flags land on expected dates.
@@ -152,4 +187,9 @@ The baseline pair test from 3.3 and the schema checks remain valid.
   of the 182 evaluable 2018 hours because target gaps leave no fresh contiguous
   history. Its 2018 metrics are therefore a 38-hour sample, and the Sep–Dec
   median improvement over persistence is only −0.43 Wh despite a lower mean MAE.
-- No quantile model is included in these numbers yet; item 4.6 follows.
+- The quantile intervals are undercovered: 44.8% versus the nominal 80% in the
+  autumn fold and 69–78% elsewhere. They are useful as a relative uncertainty
+  signal, not as calibrated prediction intervals.
+- The quantile models use fixed untuned hyperparameters, so their P50 is not
+  directly comparable in tuning effort to the Optuna-tuned point XGBoost; the
+  comparison is still leakage-safe because both see the same information set.

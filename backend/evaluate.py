@@ -14,6 +14,7 @@ from scipy.stats import wilcoxon
 
 import data_pipeline as dp
 import forecast_model as fm
+import quantile_model as qm
 import sarima_model as sm
 import weather
 
@@ -26,7 +27,7 @@ BASELINES = (
     "mean_last_4_same_weekdays",
 )
 
-LEARNED_MODELS = ("xgboost", "sarima")
+LEARNED_MODELS = ("xgboost", "sarima", "xgboost_quantile")
 
 BASELINE_DESCRIPTIONS = {
     "persistence": "last observed value before the forecast day, held flat for 24 h",
@@ -38,6 +39,7 @@ BASELINE_DESCRIPTIONS = {
 LEARNED_MODEL_DESCRIPTIONS = {
     "xgboost": "pooled direct day-ahead gradient-boosted trees on lags of 24-47, 168 and 336 h, calendar/holiday/semester flags, hour of day, lagged reporting counts, and lagged Mumbai weather; trained only on the fold's training labels, clipped at the train-only outlier cap",
     "sarima": "SARIMA(1,0,1)(0,1,1,24) on the gap-handled target, refit weekly on the trailing 60 days before each Monday origin and advanced daily with actuals up to each day's origin",
+    "xgboost_quantile": "three XGBoost quantile models (P10/P50/P90) on the same features, training window, and train-only cap as the point XGBoost; fixed untuned hyperparameters; predictions clipped at zero and rearranged so quantiles do not cross",
 }
 
 FOLDS = (
@@ -84,6 +86,7 @@ PROTOCOL = {
     "significance": "two-sided Wilcoxon signed-rank on paired absolute errors vs the best baseline; p-values unadjusted; small_sample flags fewer than 10 pairs",
     "learned_models": "xgboost is fit on the fold's training window labels only; its features at target hour t use observations at t-lag with lag >= 24 h, so all features predate the day's 00:00 IST origin; reporting counts and weather are lagged >=24 h; calendar/holiday/semester flags are known in advance; labels clipped at a train-only Q3+3*IQR cap. sarima is refit weekly on the trailing 60 days before each Monday origin and advanced daily only with actuals before the day's origin",
     "sarima": "order (1,0,1)(0,1,1,24); weekly refit on the trailing 60 days of gap-handled target; daily state updates with actuals up to each origin; recovery refit after coverage gaps",
+    "quantiles": "xgboost_quantile fits one model per quantile (0.1, 0.5, 0.9) with objective reg:quantileerror on the same features, labels, and cap as xgboost; P10-P90 coverage and pinball loss are reported per fold, and P50 is also scored as a point forecast",
 }
 
 
@@ -171,6 +174,48 @@ def compute_metrics(actual, pred, scale=None):
     }
 
 
+def _pinball(actual, pred, quantile):
+    diff = actual - pred
+    return float(np.maximum(quantile * diff, (quantile - 1) * diff).mean())
+
+
+def interval_metrics(actual, lower, median, upper):
+    """P10-P90 coverage, mean interval width, and pinball loss."""
+    frame = pd.concat(
+        [
+            pd.Series(actual).rename("actual"),
+            pd.Series(lower).rename("lower"),
+            pd.Series(median).rename("median"),
+            pd.Series(upper).rename("upper"),
+        ],
+        axis=1,
+    ).dropna()
+    if frame.empty:
+        return {
+            "status": "no_data", "n": 0, "coverage": None, "mean_width_wh": None,
+            "pinball_10": None, "pinball_50": None, "pinball_90": None,
+            "pinball_mean": None,
+        }
+
+    a = frame["actual"].to_numpy(dtype=float)
+    lo = frame["lower"].to_numpy(dtype=float)
+    mid = frame["median"].to_numpy(dtype=float)
+    up = frame["upper"].to_numpy(dtype=float)
+    pinball_10 = _pinball(a, lo, 0.1)
+    pinball_50 = _pinball(a, mid, 0.5)
+    pinball_90 = _pinball(a, up, 0.9)
+    return {
+        "status": "ok",
+        "n": int(len(a)),
+        "coverage": _clean(float(((a >= lo) & (a <= up)).mean()), 4),
+        "mean_width_wh": _clean(float((up - lo).mean()), 4),
+        "pinball_10": _clean(pinball_10, 4),
+        "pinball_50": _clean(pinball_50, 4),
+        "pinball_90": _clean(pinball_90, 4),
+        "pinball_mean": _clean((pinball_10 + pinball_50 + pinball_90) / 3, 4),
+    }
+
+
 def paired_significance(actual, pred, baseline_pred):
     """Two-sided Wilcoxon signed-rank test on paired absolute errors."""
     frame = pd.concat(
@@ -253,13 +298,16 @@ def evaluate_fold(series, fold, reporting=None, weather_frame=None):
     """Score baselines and learned models on one day-ahead fold.
 
     The evaluation mask is every hour with a target value and a seasonal-naive
-    forecast, so all models are scored on the same hours within a fold.
+    forecast. Models that cannot produce a value for an hour (SARIMA after a
+    coverage gap) are scored on their available hours, as the lagged baselines
+    already are; paired tests use the overlapping hours.
     """
     train = series.loc[fold["train_start"]:fold["train_end"]]
     scale = mase_scale(train)
     actual = series.reindex(test_hours(fold["test_start"], fold["test_end"]))
     preds = baseline_forecasts(series, fold["test_start"], fold["test_end"])
     model_fit = {}
+    quantile_frame = None
     for name in LEARNED_MODELS:
         if name == "xgboost":
             preds[name], model_fit[name] = fm.forecast(
@@ -276,11 +324,31 @@ def evaluate_fold(series, fold, reporting=None, weather_frame=None):
             preds[name], model_fit[name] = sm.forecast(
                 series, fold["test_start"], fold["test_end"]
             )
+        elif name == "xgboost_quantile":
+            quantile_frame, model_fit[name] = qm.forecast(
+                series,
+                fold["train_start"],
+                fold["train_end"],
+                fold["test_start"],
+                fold["test_end"],
+                reporting=reporting,
+                weather=weather_frame,
+            )
+            preds[name] = quantile_frame["p50"]
     mask = actual.notna() & preds["seasonal_naive_24"].notna()
 
     models = {}
     for name in BASELINES + LEARNED_MODELS:
         models[name] = compute_metrics(actual[mask], preds[name][mask], scale)
+
+    intervals = {}
+    if quantile_frame is not None:
+        intervals["xgboost_quantile"] = interval_metrics(
+            actual[mask],
+            quantile_frame.loc[mask, "p10"],
+            quantile_frame.loc[mask, "p50"],
+            quantile_frame.loc[mask, "p90"],
+        )
 
     best, selection_mask, selection_hours, selection_metrics = select_best_baseline(
         actual, preds, mask, scale
@@ -315,6 +383,7 @@ def evaluate_fold(series, fold, reporting=None, weather_frame=None):
         },
         "mase_scale": _clean(scale, 4),
         "models": models,
+        "intervals": intervals,
         "model_fit": model_fit,
         "best_baseline": best,
         "selection": {
@@ -417,6 +486,10 @@ def main():
                 print(f"fit {name}: fits={meta.get('n_fits')}, "
                       f"hours={meta.get('predicted_hours')}, "
                       f"failures={meta.get('fit_failures')}")
+        for name, im in fold.get("intervals", {}).items():
+            print(f"interval {name}: n={im['n']} coverage={_show(im['coverage'], 3)} "
+                  f"width={_show(im['mean_width_wh'])} Wh "
+                  f"pinball={_show(im['pinball_mean'], 3)}")
         selection = fold["selection"]
         print(f"best baseline: {fold['best_baseline']} "
               f"({selection['mask']}, {selection['hours']} h, by {selection['by']})")

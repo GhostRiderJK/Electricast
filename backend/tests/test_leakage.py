@@ -17,6 +17,7 @@ if str(BACKEND) not in sys.path:
 import data_pipeline as dp  # noqa: E402
 import evaluate as ev  # noqa: E402
 import forecast_model as fm  # noqa: E402
+import quantile_model as qm  # noqa: E402
 import sarima_model as sm  # noqa: E402
 
 TZ = dp.TZ
@@ -201,6 +202,44 @@ def test_xgboost_training_labels_end_before_test_start():
     _, metadata = fm.fit(series, series.index[0], series.index[20 * 24 - 1])
     assert pd.Timestamp(metadata["train_end"], tz=TZ) < TEST_DAY
     assert metadata["n_train"] > 0
+
+
+def test_interval_metrics_hand_check():
+    metrics = ev.interval_metrics(
+        pd.Series([10.0, 20.0]),
+        pd.Series([8.0, 15.0]),
+        pd.Series([9.0, 22.0]),
+        pd.Series([12.0, 25.0]),
+    )
+    assert metrics["n"] == 2
+    assert metrics["coverage"] == 1.0
+    assert metrics["mean_width_wh"] == 7.0
+    assert abs(metrics["pinball_10"] - 0.35) < 1e-9
+    assert abs(metrics["pinball_50"] - 0.75) < 1e-9
+    assert abs(metrics["pinball_90"] - 0.35) < 1e-9
+    assert abs(metrics["pinball_mean"] - 0.4833) < 1e-9
+
+    missed = ev.interval_metrics(
+        pd.Series([30.0]), pd.Series([8.0]), pd.Series([9.0]), pd.Series([12.0])
+    )
+    assert missed["coverage"] == 0.0
+
+
+def test_quantile_forecast_does_not_read_forecast_day_values():
+    series = synthetic_series()
+    params = {"n_estimators": 20, "max_depth": 2, "learning_rate": 0.1, "n_jobs": 1}
+    args = (series, series.index[0], series.index[20 * 24 - 1],
+            TEST_DAY, TEST_HOURS[-1])
+    before, metadata = qm.forecast(*args, params=params)
+    after, _ = qm.forecast(with_future_replaced(series, TEST_DAY), *args[1:],
+                           params=params)
+    np.testing.assert_allclose(before.to_numpy(), after.to_numpy())
+    assert list(before.columns) == ["p10", "p50", "p90"]
+    assert before.notna().all().all()
+    assert (before["p10"] <= before["p50"]).all()
+    assert (before["p50"] <= before["p90"]).all()
+    assert metadata["quantiles"] == [0.1, 0.5, 0.9]
+    assert metadata["n_quantile_crossings"] >= 0
 
 
 def test_sarima_history_stops_at_last_gap_and_enforces_minimum():
