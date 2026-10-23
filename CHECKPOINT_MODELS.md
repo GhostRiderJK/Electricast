@@ -1,6 +1,6 @@
-# Models checkpoint — after item 4.4
+# Models checkpoint — through item 4.5
 
-Generated from `backend/results.json` (run 2026-10-23, after item 4.4). Regenerate
+Generated from `backend/results.json` (run 2026-10-23, after item 4.5). Regenerate
 from the repo root with:
 
 ```bash
@@ -9,8 +9,8 @@ python backend/evaluate.py
 
 This runs the full day-ahead backtest (four expanding folds) and overwrites
 `backend/results.json`. It reads the raw CSVs and the committed weather cache; it
-does not touch the network. The full run takes about 2 minutes on this machine,
-most of it Optuna tuning.
+does not touch the network. The full run takes about 2–3 minutes on this machine,
+most of it Optuna tuning and SARIMA refits.
 
 ## Protocol recap
 
@@ -20,8 +20,9 @@ most of it Optuna tuning.
   seasonal-naive-24 available.
 - Baselines: persistence, seasonal naive 24 h, same hour last week, mean of the
   same hour on the previous four same weekdays.
-- Learned model: one pooled XGBoost per fold, trained only on that fold's training
-  window labels. No recursive updating and no test-window labels in fitting.
+- Learned models: one pooled XGBoost per fold, trained only on that fold's training
+  window labels, and one rolling SARIMA per fold, refit weekly from pre-origin
+  actuals. Neither reads test-window labels.
 
 ## Feature set (XGBoost)
 
@@ -61,29 +62,53 @@ clipped at a train-only Q3 + 3×IQR cap; predictions are clipped at zero.
 | 2017-09_12 | 58.41 | 284 / 253 / 244 | 253 | 5 | 0.0111 | 15.21 | 0.726 | 0.513 | 2.86 | 0.170 |
 | 2018-05_06 | 139.55 | 132 / 85 / 68 | 85 | 3 | 0.0331 | 6.46 | 0.999 | 0.742 | 0.38 | 0.846 |
 
+## SARIMA configuration
+
+- Order (1,0,1)(0,1,1,24) on the gap-handled target, fitted by
+  `statsmodels` SARIMAX with stationarity and invertibility constraints disabled.
+- Refit on Mondays, on the first test day, and after a coverage gap, using the
+  trailing 60 days (1,440 h) of contiguous history ending one hour before the
+  origin. A refit needs at least 7 contiguous days.
+- Between refits the fitted state is advanced with actuals strictly before each
+  day's 00:00 IST origin. No value from the forecast day is read.
+- A forecast is skipped when the newest state is more than 48 h old; negative
+  predictions are clipped to zero.
+- Coverage is partial by design: 744 / 744 / 1,554 / 38 evaluable hours in the
+  four folds. The rest are hours where a gap left no sufficiently fresh,
+  sufficiently long history.
+
 ## Fold results (evaluation mask)
 
 | Fold | Model | n | MAE | RMSE | WAPE % | MASE | Bias | R² | Best baseline (MAE) | Median abs-error diff | p |
 |---|---|---:|---:|---:|---:|---:|---:|---:|---|---:|---:|
 | 2017-07 | xgboost | 744 | 69.31 | 90.53 | 19.02 | 0.819 | 5.14 | 0.4150 | seasonal naive (75.01) | −4.00 | 0.0215 |
+| 2017-07 | sarima | 744 | 65.66 | 87.70 | 18.02 | 0.776 | 7.89 | 0.4510 | seasonal naive (75.01) | −6.61 | 0.00012 |
 | 2017-08 | xgboost | 744 | 59.51 | 80.87 | 16.30 | 0.732 | −12.87 | 0.4718 | mean of 4 weekdays (58.93) | −0.15 | 0.844 |
+| 2017-08 | sarima | 744 | 60.60 | 81.11 | 16.60 | 0.745 | −6.53 | 0.4686 | mean of 4 weekdays (58.93) | +0.42 | 0.830 |
 | 2017-09_12 | xgboost | 2,243 | 167.27 | 212.55 | 69.73 | 2.089 | 111.15 | −0.1568 | persistence (116.21) | +12.37 | 2.3e-22 |
+| 2017-09_12 | sarima | 1,554 | 104.23 | 146.99 | 44.17 | 1.302 | 8.14 | 0.4764 | persistence (116.21) | −0.43 | 0.0029 |
 | 2018-05_06 | xgboost | 182 | 120.75 | 159.57 | 25.74 | 1.176 | −87.45 | 0.1761 | seasonal naive (132.87) | +0.28 | 0.518 |
+| 2018-05_06 | sarima | 38 | 93.80 | 127.08 | 17.53 | 0.914 | −35.21 | 0.7094 | seasonal naive (132.87) | −9.36 | 0.025 |
 
-Negative median abs-error diff means XGBoost has the lower median absolute error.
-Only the July fold shows a statistically significant improvement over the best
-baseline; August is a statistical tie, and Sep–Dec is significantly worse.
+Negative median abs-error diff means the model has the lower median absolute error.
+Only the July fold shows a statistically significant XGBoost improvement over the
+best baseline; August is a statistical tie, and Sep–Dec is significantly worse.
+SARIMA is statistically better in July and on its overlapping Sep–Dec hours, but
+the Sep–Dec median difference is only −0.43 Wh, and its 2018 p-value rests on 38
+paired hours. SARIMA has fewer evaluable hours than XGBoost in the last two folds,
+so their MAEs are not computed over identical hours.
 
 ## What changed across model iterations
 
-| Fold | Fixed XGBoost (4.1) | + calendar/reporting (4.2) | + weather (4.3) | Tuned (4.4) |
-|---|---:|---:|---:|---:|
-| 2017-07 | 65.95 | 66.46 | 65.69 | 69.31 |
-| 2017-08 | 62.35 | 61.55 | 62.24 | 59.51 |
-| 2017-09_12 | 151.01 | 163.22 | 170.40 | 167.27 |
-| 2018-05_06 | 142.59 | 100.40 | 106.47 | 120.75 |
+| Fold | Fixed XGBoost (4.1) | + calendar/reporting (4.2) | + weather (4.3) | Tuned XGBoost (4.4) | SARIMA (4.5) |
+|---|---:|---:|---:|---:|---:|
+| 2017-07 | 65.95 | 66.46 | 65.69 | 69.31 | 65.66 |
+| 2017-08 | 62.35 | 61.55 | 62.24 | 59.51 | 60.60 |
+| 2017-09_12 | 151.01 | 163.22 | 170.40 | 167.27 | 104.23 |
+| 2018-05_06 | 142.59 | 100.40 | 106.47 | 120.75 | 93.80 |
 
-These are MAE in Wh. The fixed configuration used 400 trees at depth 4 with
+These are MAE in Wh. SARIMA's Sep–Dec and May–Jun values cover 1,554 and 38
+evaluable hours respectively, versus 2,243 and 182 for XGBoost. The fixed configuration used 400 trees at depth 4 with
 learning rate 0.03; the tuned configuration uses per-fold Optuna parameters. The
 unseen-autumn fold degrades as features are added, while the year-later 2018 fold
 improves sharply with calendar features and then gives some of that back under
@@ -91,12 +116,15 @@ tuning. The feature set was not edited in response to test results.
 
 ## Leakage evidence
 
-`python -m pytest backend/tests -q` → 12 passed. Tests cover:
+`python -m pytest backend/tests -q` → 15 passed. Tests cover:
 
 - every feature lag is ≥24 h;
 - feature frames for a test day are unchanged when every value from that day's
   origin onward is replaced with 1e9 (load, reporting, and weather);
-- all four baselines and XGBoost predictions are unchanged under the same mutation;
+- all four baselines, XGBoost, and SARIMA predictions are unchanged under the same
+  mutation;
+- SARIMA contiguous history stops at the last gap, rejects runs under 7 days, and
+  emits nothing from a state older than 48 h;
 - a tuned XGBoost forecast is unchanged when test-window values are replaced;
 - time-series CV splits stay inside the training window and never overlap;
 - holiday/weekend/semester flags land on expected dates.
@@ -120,5 +148,8 @@ The baseline pair test from 3.3 and the schema checks remain valid.
   the 24-apartment stable panel changes composition at the edges of the coverage gap.
 - Optuna selects hyperparameters on short, in-window CV folds. Those folds do not
   contain an autumn/winter regime for the Sep–Dec test, so CV cannot select for it.
-- No SARIMA or quantile model is included in these numbers yet; items 4.5 and 4.6
-  follow.
+- SARIMA is unavailable for 689 of the 2,243 evaluable Sep–Dec hours and for 144
+  of the 182 evaluable 2018 hours because target gaps leave no fresh contiguous
+  history. Its 2018 metrics are therefore a 38-hour sample, and the Sep–Dec
+  median improvement over persistence is only −0.43 Wh despite a lower mean MAE.
+- No quantile model is included in these numbers yet; item 4.6 follows.

@@ -14,6 +14,7 @@ from scipy.stats import wilcoxon
 
 import data_pipeline as dp
 import forecast_model as fm
+import sarima_model as sm
 import weather
 
 RESULTS_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "results.json")
@@ -25,7 +26,7 @@ BASELINES = (
     "mean_last_4_same_weekdays",
 )
 
-LEARNED_MODELS = ("xgboost",)
+LEARNED_MODELS = ("xgboost", "sarima")
 
 BASELINE_DESCRIPTIONS = {
     "persistence": "last observed value before the forecast day, held flat for 24 h",
@@ -36,6 +37,7 @@ BASELINE_DESCRIPTIONS = {
 
 LEARNED_MODEL_DESCRIPTIONS = {
     "xgboost": "pooled direct day-ahead gradient-boosted trees on lags of 24-47, 168 and 336 h, calendar/holiday/semester flags, hour of day, lagged reporting counts, and lagged Mumbai weather; trained only on the fold's training labels, clipped at the train-only outlier cap",
+    "sarima": "SARIMA(1,0,1)(0,1,1,24) on the gap-handled target, refit weekly on the trailing 60 days before each Monday origin and advanced daily with actuals up to each day's origin",
 }
 
 FOLDS = (
@@ -80,7 +82,8 @@ PROTOCOL = {
     "mase_scale": "mean absolute 24-h seasonal difference over valid training pairs",
     "best_baseline_selection": "lowest MASE on the all-four-baseline mask when it covers >=50% of evaluation hours (and >=24 h); otherwise on the evaluation mask",
     "significance": "two-sided Wilcoxon signed-rank on paired absolute errors vs the best baseline; p-values unadjusted; small_sample flags fewer than 10 pairs",
-    "learned_models": "fit on the fold's training window labels only; features at target hour t use observations at t-lag with lag >= 24 h, so all features predate the day's 00:00 IST origin; reporting counts and weather are lagged >=24 h; calendar/holiday/semester flags are known in advance; labels clipped at a train-only Q3+3*IQR cap",
+    "learned_models": "xgboost is fit on the fold's training window labels only; its features at target hour t use observations at t-lag with lag >= 24 h, so all features predate the day's 00:00 IST origin; reporting counts and weather are lagged >=24 h; calendar/holiday/semester flags are known in advance; labels clipped at a train-only Q3+3*IQR cap. sarima is refit weekly on the trailing 60 days before each Monday origin and advanced daily only with actuals before the day's origin",
+    "sarima": "order (1,0,1)(0,1,1,24); weekly refit on the trailing 60 days of gap-handled target; daily state updates with actuals up to each origin; recovery refit after coverage gaps",
 }
 
 
@@ -269,6 +272,10 @@ def evaluate_fold(series, fold, reporting=None, weather_frame=None):
                 weather=weather_frame,
                 tune_model=True,
             )
+        elif name == "sarima":
+            preds[name], model_fit[name] = sm.forecast(
+                series, fold["test_start"], fold["test_end"]
+            )
     mask = actual.notna() & preds["seasonal_naive_24"].notna()
 
     models = {}
@@ -403,8 +410,13 @@ def main():
                   f"{_show(m['bias']):>8s} {_show(m['R2'], 4):>8s} "
                   f"{_show(m['sMAPE']):>8s}")
         for name, meta in fold["model_fit"].items():
-            print(f"fit {name}: n={meta['n_train']}, cap={_show(meta['cap_wh'])} Wh, "
-                  f"capped={meta['n_capped']}")
+            if "n_train" in meta:
+                print(f"fit {name}: n={meta['n_train']}, "
+                      f"cap={_show(meta['cap_wh'])} Wh, capped={meta['n_capped']}")
+            else:
+                print(f"fit {name}: fits={meta.get('n_fits')}, "
+                      f"hours={meta.get('predicted_hours')}, "
+                      f"failures={meta.get('fit_failures')}")
         selection = fold["selection"]
         print(f"best baseline: {fold['best_baseline']} "
               f"({selection['mask']}, {selection['hours']} h, by {selection['by']})")

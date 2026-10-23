@@ -17,6 +17,7 @@ if str(BACKEND) not in sys.path:
 import data_pipeline as dp  # noqa: E402
 import evaluate as ev  # noqa: E402
 import forecast_model as fm  # noqa: E402
+import sarima_model as sm  # noqa: E402
 
 TZ = dp.TZ
 TEST_DAY = pd.Timestamp("2020-01-22", tz=TZ)
@@ -200,3 +201,37 @@ def test_xgboost_training_labels_end_before_test_start():
     _, metadata = fm.fit(series, series.index[0], series.index[20 * 24 - 1])
     assert pd.Timestamp(metadata["train_end"], tz=TZ) < TEST_DAY
     assert metadata["n_train"] > 0
+
+
+def test_sarima_history_stops_at_last_gap_and_enforces_minimum():
+    index = pd.date_range("2020-01-01", periods=25 * 24, freq="h", tz=TZ)
+    series = pd.Series(500.0, index=index)
+    series.loc["2020-01-10":"2020-01-11 23:00"] = np.nan
+
+    tail = sm.contiguous_tail(series, TEST_DAY - pd.Timedelta(hours=1))
+    assert tail is not None
+    assert tail.index[0] == pd.Timestamp("2020-01-12 00:00", tz=TZ)
+    assert tail.index[-1] == TEST_DAY - pd.Timedelta(hours=1)
+    assert tail.notna().all()
+
+    short = series.loc[pd.Timestamp("2020-01-18", tz=TZ):]
+    assert sm.contiguous_tail(short, TEST_DAY - pd.Timedelta(hours=1)) is None
+
+
+def test_sarima_does_not_read_forecast_day_values():
+    series = synthetic_series()
+    args = (series, TEST_DAY, TEST_HOURS[-1])
+    before, metadata = sm.forecast(*args)
+    after, _ = sm.forecast(with_future_replaced(series, TEST_DAY), *args[1:])
+    np.testing.assert_allclose(before.to_numpy(), after.to_numpy(), equal_nan=True)
+    assert metadata["n_fits"] == 1
+    assert metadata["predicted_hours"] == 24
+
+
+def test_sarima_skips_state_older_than_staleness_limit():
+    series = synthetic_series()
+    stale = series.loc[:pd.Timestamp("2020-01-15 23:00", tz=TZ)]
+    pred, metadata = sm.forecast(stale, TEST_DAY, TEST_HOURS[-1])
+    assert pred.isna().all()
+    assert metadata["n_fits"] == 1
+    assert metadata["predicted_hours"] == 0

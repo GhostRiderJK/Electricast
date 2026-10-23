@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-23T18:33:02+05:30",
+  "generated_at": "2026-10-23T18:45:49+05:30",
   "protocol": {
     "timezone": "Asia/Kolkata",
     "target": "mean hourly load per reporting stable apartment (Wh)",
@@ -11,7 +11,8 @@
     "mase_scale": "mean absolute 24-h seasonal difference over valid training pairs",
     "best_baseline_selection": "lowest MASE on the all-four-baseline mask when it covers >=50% of evaluation hours (and >=24 h); otherwise on the evaluation mask",
     "significance": "two-sided Wilcoxon signed-rank on paired absolute errors vs the best baseline; p-values unadjusted; small_sample flags fewer than 10 pairs",
-    "learned_models": "fit on the fold's training window labels only; features at target hour t use observations at t-lag with lag >= 24 h, so all features predate the day's 00:00 IST origin; reporting counts and weather are lagged >=24 h; calendar/holiday/semester flags are known in advance; labels clipped at a train-only Q3+3*IQR cap"
+    "learned_models": "xgboost is fit on the fold's training window labels only; its features at target hour t use observations at t-lag with lag >= 24 h, so all features predate the day's 00:00 IST origin; reporting counts and weather are lagged >=24 h; calendar/holiday/semester flags are known in advance; labels clipped at a train-only Q3+3*IQR cap. sarima is refit weekly on the trailing 60 days before each Monday origin and advanced daily only with actuals before the day's origin",
+    "sarima": "order (1,0,1)(0,1,1,24); weekly refit on the trailing 60 days of gap-handled target; daily state updates with actuals up to each origin; recovery refit after coverage gaps"
   },
   "baselines": [
     "persistence",
@@ -26,10 +27,12 @@
     "mean_last_4_same_weekdays": "mean of the same hour on the previous four same weekdays"
   },
   "learned_models": [
-    "xgboost"
+    "xgboost",
+    "sarima"
   ],
   "learned_model_descriptions": {
-    "xgboost": "pooled direct day-ahead gradient-boosted trees on lags of 24-47, 168 and 336 h, calendar/holiday/semester flags, hour of day, lagged reporting counts, and lagged Mumbai weather; trained only on the fold's training labels, clipped at the train-only outlier cap"
+    "xgboost": "pooled direct day-ahead gradient-boosted trees on lags of 24-47, 168 and 336 h, calendar/holiday/semester flags, hour of day, lagged reporting counts, and lagged Mumbai weather; trained only on the fold's training labels, clipped at the train-only outlier cap",
+    "sarima": "SARIMA(1,0,1)(0,1,1,24) on the gap-handled target, refit weekly on the trailing 60 days before each Monday origin and advanced daily with actuals up to each day's origin"
   },
   "weather": {
     "available": true,
@@ -131,6 +134,17 @@
           "bias": 5.1406,
           "R2": 0.414978,
           "sMAPE": 20.9199
+        },
+        "sarima": {
+          "status": "ok",
+          "n": 744,
+          "MAE": 65.6587,
+          "RMSE": 87.6975,
+          "WAPE": 18.0193,
+          "MASE": 0.776,
+          "bias": 7.8866,
+          "R2": 0.451014,
+          "sMAPE": 19.9662
         }
       },
       "model_fit": {
@@ -244,6 +258,35 @@
             "best_iteration": 30,
             "selection": "median best_iteration across the CV validation slices"
           }
+        },
+        "sarima": {
+          "order": [
+            1,
+            0,
+            1
+          ],
+          "seasonal_order": [
+            0,
+            1,
+            1,
+            24
+          ],
+          "max_history_hours": 1440,
+          "min_history_hours": 168,
+          "max_staleness_hours": 48,
+          "n_fits": 6,
+          "fit_failures": 0,
+          "refit_origins": [
+            "2017-07-01 00:00:00+05:30",
+            "2017-07-03 00:00:00+05:30",
+            "2017-07-10 00:00:00+05:30",
+            "2017-07-17 00:00:00+05:30",
+            "2017-07-24 00:00:00+05:30",
+            "2017-07-31 00:00:00+05:30"
+          ],
+          "predicted_hours": 744,
+          "nan_hours": 0,
+          "refit_policy": "Mondays and first test day; recovery refit after coverage gaps"
         }
       },
       "best_baseline": "seasonal_naive_24",
@@ -338,6 +381,16 @@
           "p_value": 0.021531292043852457,
           "significant_at_0.05": true,
           "reason": null
+        },
+        "sarima": {
+          "n_pairs": 744,
+          "median_abs_error_diff_wh": -6.6093,
+          "model_better": true,
+          "small_sample": false,
+          "statistic": 116021.0,
+          "p_value": 0.00012044536324242556,
+          "significant_at_0.05": true,
+          "reason": null
         }
       }
     },
@@ -413,6 +466,17 @@
           "bias": -12.8663,
           "R2": 0.471778,
           "sMAPE": 16.9604
+        },
+        "sarima": {
+          "status": "ok",
+          "n": 744,
+          "MAE": 60.5989,
+          "RMSE": 81.1139,
+          "WAPE": 16.6017,
+          "MASE": 0.745,
+          "bias": -6.5316,
+          "R2": 0.468568,
+          "sMAPE": 17.3103
         }
       },
       "model_fit": {
@@ -526,6 +590,34 @@
             "best_iteration": 320,
             "selection": "median best_iteration across the CV validation slices"
           }
+        },
+        "sarima": {
+          "order": [
+            1,
+            0,
+            1
+          ],
+          "seasonal_order": [
+            0,
+            1,
+            1,
+            24
+          ],
+          "max_history_hours": 1440,
+          "min_history_hours": 168,
+          "max_staleness_hours": 48,
+          "n_fits": 5,
+          "fit_failures": 0,
+          "refit_origins": [
+            "2017-08-01 00:00:00+05:30",
+            "2017-08-07 00:00:00+05:30",
+            "2017-08-14 00:00:00+05:30",
+            "2017-08-21 00:00:00+05:30",
+            "2017-08-28 00:00:00+05:30"
+          ],
+          "predicted_hours": 744,
+          "nan_hours": 0,
+          "refit_policy": "Mondays and first test day; recovery refit after coverage gaps"
         }
       },
       "best_baseline": "mean_last_4_same_weekdays",
@@ -620,6 +712,16 @@
           "p_value": 0.8439931354722782,
           "significant_at_0.05": false,
           "reason": null
+        },
+        "sarima": {
+          "n_pairs": 744,
+          "median_abs_error_diff_wh": 0.4215,
+          "model_better": false,
+          "small_sample": false,
+          "statistic": 137311.0,
+          "p_value": 0.8300060972164037,
+          "significant_at_0.05": false,
+          "reason": null
         }
       }
     },
@@ -695,6 +797,17 @@
           "bias": 111.151,
           "R2": -0.156792,
           "sMAPE": 79.4663
+        },
+        "sarima": {
+          "status": "ok",
+          "n": 1554,
+          "MAE": 104.2338,
+          "RMSE": 146.9874,
+          "WAPE": 44.1744,
+          "MASE": 1.3019,
+          "bias": 8.1369,
+          "R2": 0.4764,
+          "sMAPE": 70.1792
         }
       },
       "model_fit": {
@@ -808,6 +921,47 @@
             "best_iteration": 253,
             "selection": "median best_iteration across the CV validation slices"
           }
+        },
+        "sarima": {
+          "order": [
+            1,
+            0,
+            1
+          ],
+          "seasonal_order": [
+            0,
+            1,
+            1,
+            24
+          ],
+          "max_history_hours": 1440,
+          "min_history_hours": 168,
+          "max_staleness_hours": 48,
+          "n_fits": 18,
+          "fit_failures": 0,
+          "refit_origins": [
+            "2017-09-01 00:00:00+05:30",
+            "2017-09-04 00:00:00+05:30",
+            "2017-09-05 00:00:00+05:30",
+            "2017-09-23 00:00:00+05:30",
+            "2017-09-25 00:00:00+05:30",
+            "2017-10-02 00:00:00+05:30",
+            "2017-10-09 00:00:00+05:30",
+            "2017-10-11 00:00:00+05:30",
+            "2017-11-03 00:00:00+05:30",
+            "2017-11-06 00:00:00+05:30",
+            "2017-11-13 00:00:00+05:30",
+            "2017-11-20 00:00:00+05:30",
+            "2017-11-27 00:00:00+05:30",
+            "2017-12-04 00:00:00+05:30",
+            "2017-12-11 00:00:00+05:30",
+            "2017-12-17 00:00:00+05:30",
+            "2017-12-28 00:00:00+05:30",
+            "2017-12-29 00:00:00+05:30"
+          ],
+          "predicted_hours": 1800,
+          "nan_hours": 1128,
+          "refit_policy": "Mondays and first test day; recovery refit after coverage gaps"
         }
       },
       "best_baseline": "persistence",
@@ -902,6 +1056,16 @@
           "p_value": 2.3334456876326874e-22,
           "significant_at_0.05": true,
           "reason": null
+        },
+        "sarima": {
+          "n_pairs": 1554,
+          "median_abs_error_diff_wh": -0.4295,
+          "model_better": true,
+          "small_sample": false,
+          "statistic": 551444.0,
+          "p_value": 0.0029096753497054612,
+          "significant_at_0.05": true,
+          "reason": null
         }
       }
     },
@@ -977,6 +1141,17 @@
           "bias": -87.4463,
           "R2": 0.176065,
           "sMAPE": 27.3974
+        },
+        "sarima": {
+          "status": "ok",
+          "n": 38,
+          "MAE": 93.8019,
+          "RMSE": 127.0792,
+          "WAPE": 17.5286,
+          "MASE": 0.9136,
+          "bias": -35.2077,
+          "R2": 0.709403,
+          "sMAPE": 24.0919
         }
       },
       "model_fit": {
@@ -1090,6 +1265,32 @@
             "best_iteration": 85,
             "selection": "median best_iteration across the CV validation slices"
           }
+        },
+        "sarima": {
+          "order": [
+            1,
+            0,
+            1
+          ],
+          "seasonal_order": [
+            0,
+            1,
+            1,
+            24
+          ],
+          "max_history_hours": 1440,
+          "min_history_hours": 168,
+          "max_staleness_hours": 48,
+          "n_fits": 3,
+          "fit_failures": 0,
+          "refit_origins": [
+            "2018-05-01 00:00:00+05:30",
+            "2018-05-31 00:00:00+05:30",
+            "2018-06-02 00:00:00+05:30"
+          ],
+          "predicted_hours": 96,
+          "nan_hours": 744,
+          "refit_policy": "Mondays and first test day; recovery refit after coverage gaps"
         }
       },
       "best_baseline": "seasonal_naive_24",
@@ -1183,6 +1384,16 @@
           "statistic": 7866.0,
           "p_value": 0.517609474117629,
           "significant_at_0.05": false,
+          "reason": null
+        },
+        "sarima": {
+          "n_pairs": 38,
+          "median_abs_error_diff_wh": -9.3571,
+          "model_better": true,
+          "small_sample": false,
+          "statistic": 217.0,
+          "p_value": 0.02529872478771722,
+          "significant_at_0.05": true,
           "reason": null
         }
       }

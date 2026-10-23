@@ -39,7 +39,7 @@ Rules: one task per iteration. Tick [x] only after the VERIFY step passes.
 - [x] 4.2 Calendar + holiday + semester flags + n_reporting features
 - [x] 4.3 Weather features from Open-Meteo, cached to disk
 - [x] 4.4 Optuna tuning on time-series CV inside train; early stopping on a train-side validation slice
-- [ ] 4.5 SARIMA/SARIMAX rolling day-ahead with weekly refit
+- [x] 4.5 SARIMA/SARIMAX rolling day-ahead with weekly refit
 - [ ] 4.6 Quantile XGBoost P10/P50/P90 with coverage and pinball loss
 - [ ] 4.7 LSTM/GRU done properly, or omitted from the UI entirely
 

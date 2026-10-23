@@ -182,3 +182,12 @@ One entry per iteration: date, item id, change, evidence, numbers.
 
 
 
+
+## 2026-10-23 — 4.5 Rolling SARIMA with weekly refit
+
+- Added `backend/sarima_model.py` and registered `sarima` as a second learned model in `evaluate.py`. The model is SARIMA(1,0,1)(0,1,1,24) on the gap-handled target, refit on Mondays, the first test day, and after a coverage gap from the trailing 60 days (1,440 h) of contiguous history ending one hour before the origin. Within a week its state is advanced with actuals up to each day's origin, never with forecast-day values. A refit needs 7 contiguous days, forecasts are skipped when the state is more than 48 h stale, and negative forecasts are clipped to zero.
+- Why the two guards: with the original 14-day minimum plus no staleness limit, the 2018 fold had no forecasts at all; lowering the minimum alone let a five-month-stale state emit 214 hours at MAE 249.5 Wh. The 7-day minimum plus the 48 h staleness limit yields a small but genuine 2018 forecast (96 h predicted, 38 h evaluable) instead of either nothing or a misleading full fold.
+- Full backtest, evaluation mask (SARIMA hours in parentheses): SARIMA MAE 65.66 Wh in Jul (744 h; best baseline seasonal naive 75.01; paired median −6.61 Wh, p = 1.2e-04), 60.60 in Aug (744 h; mean-of-4 58.93; +0.42 Wh, p = 0.830), 104.23 in Sep–Dec (1,554 of 2,243 h; persistence 116.21; −0.43 Wh, p = 2.9e-03), and 93.80 in May–Jun (38 of 182 h; seasonal naive 132.87; −9.36 Wh, p = 0.025). XGBoost stays at 69.31 / 59.51 / 167.27 / 120.75 Wh. SARIMA is the stronger learned model in three folds, but its Sep–Dec advantage is a near-tie on the median and its 2018 sample is only 38 hours.
+- Coverage is a real limitation: the Sep–Dec fold has 689 evaluable hours without a SARIMA forecast because the target gaps outrun the state, and the 2018 fold has 144. Metrics use each model's available hours, as with the lagged baselines; paired tests use overlapping hours, and coverage is recorded in `results.json`.
+- Tests grew to 15: contiguous history stops at the last gap and rejects runs shorter than the minimum; SARIMA predictions are unchanged when every value from the forecast-day origin onward is replaced; a state older than 48 h emits no forecasts. `python -m pytest backend/tests -q` → 15 passed (19 s).
+- Regenerated `backend/results.json` (now includes `sarima` metrics and fit metadata) and updated `CHECKPOINT_MODELS.md` through item 4.5.
