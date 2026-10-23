@@ -661,6 +661,9 @@ def _build_limitations():
     for fold in results.get("folds", []):
         model = (fold.get("models") or {}).get("sarima") or {}
         interval = (fold.get("intervals") or {}).get("xgboost_quantile") or {}
+        conformal = (fold.get("intervals") or {}).get("conformal") or {}
+        after_all = (conformal.get("after_all_days") or {}).get("coverage")
+        after_calibrated = (conformal.get("after_calibrated_days") or {}).get("coverage")
         fit = (fold.get("model_fit") or {}).get("xgboost") or {}
         fold_rows.append({
             "id": fold["id"],
@@ -674,6 +677,11 @@ def _build_limitations():
             "sarima_hours": model.get("n") if model.get("status") == "ok" else 0,
             "interval_coverage": interval.get("coverage"),
             "interval_n": interval.get("n"),
+            "interval_after_coverage": after_all,
+            "interval_after_calibrated_coverage": after_calibrated,
+            "conformal_calibrated_days": conformal.get("n_days_calibrated"),
+            "conformal_warmup_days": conformal.get("warmup_days"),
+            "conformal_window_days": conformal.get("window_days"),
         })
 
     scoring_rows = [row for row in fold_rows if not row["stress_test"]]
@@ -682,10 +690,73 @@ def _build_limitations():
     eval_days = sum(row["eval_days"] for row in fold_rows)
     sarima_hours = sum(row["sarima_hours"] for row in fold_rows)
     coverage_rows = [row for row in fold_rows if row["interval_coverage"] is not None]
-    worst_coverage = min(coverage_rows, key=lambda row: row["interval_coverage"]) \
-        if coverage_rows else None
+    after_rows = [
+        row for row in fold_rows if row["interval_after_coverage"] is not None
+    ]
+    worst_after = min(after_rows, key=lambda row: row["interval_after_coverage"]) \
+        if after_rows else None
+
+    def _weighted_interval(rows, key):
+        pairs = [
+            (row[key], row["interval_n"]) for row in rows
+            if row.get(key) is not None and row.get("interval_n")
+        ]
+        total = sum(n for _, n in pairs)
+        return sum(value * n for value, n in pairs) / total if total else None
+
+    scoring_before = _weighted_interval(scoring_rows, "interval_coverage")
+    scoring_after = _weighted_interval(scoring_rows, "interval_after_coverage")
+
+    learned_keys = [
+        key for key in ("xgboost", "sarima", "xgboost_quantile")
+        if key in (results.get("learned_models") or [])
+    ]
+    common_stats = []
+    for key in learned_keys:
+        wins = significant_wins = paired_folds = 0
+        for fold in results.get("folds", []):
+            if fold.get("stress_test"):
+                continue
+            comp = ((fold.get("common_hours") or {}).get("paired_vs_best") or {}).get(key) or {}
+            if comp.get("status") != "ok":
+                continue
+            paired_folds += 1
+            diff = comp.get("mae_diff_wh")
+            if diff is not None and diff < 0:
+                wins += 1
+                if comp.get("significant_at_0.05"):
+                    significant_wins += 1
+        common_stats.append({
+            "key": key,
+            "label": BACKTEST_LABELS.get(key, key),
+            "wins": wins,
+            "significant_wins": significant_wins,
+            "paired_folds": paired_folds,
+        })
+    total_significant_wins = sum(row["significant_wins"] for row in common_stats)
+    total_wins = sum(row["wins"] for row in common_stats)
+    december = next(
+        (fold for fold in results.get("folds", []) if fold.get("id") == "2017-12"),
+        None,
+    )
+    december_all_losses = bool(december) and all(
+        (((december.get("common_hours") or {}).get("paired_vs_best") or {}).get(key) or {})
+        .get("mae_diff_wh", 0) > 0
+        for key in learned_keys
+    )
     fold_2018 = next(
         (row for row in fold_rows if str(row["test_start"]).startswith("2018")), None
+    )
+    interval_pairs = " / ".join(
+        f"{row['label']} {row['interval_coverage']:.1%}\u2192"
+        f"{row['interval_after_coverage']:.1%}"
+        for row in coverage_rows
+        if row["interval_after_coverage"] is not None
+    )
+    common_pairs = " / ".join(
+        f"{row['label']} {row['wins']}/{row['paired_folds']} "
+        f"({row['significant_wins']} with p<0.05)"
+        for row in common_stats if row["paired_folds"]
     )
 
     longest_gap = int(target.get("longest_gap_hours") or 0)
@@ -828,14 +899,41 @@ def _build_limitations():
                 },
                 {
                     "label": "P10–P90 interval",
-                    "value": "80% nominal",
+                    "value": "80% nominal · rolling CQR",
                     "detail": (
-                        "Measured coverage by fold: "
-                        + " / ".join(f"{row['interval_coverage']:.1%}"
-                                      for row in coverage_rows)
-                        + (f"; worst is {worst_coverage['label']} at "
-                           f"{worst_coverage['interval_coverage']:.1%}" if worst_coverage else "")
-                        + ". Intervals are not calibrated on test folds."
+                        "Coverage before → after rolling conformal calibration, by fold: "
+                        + (interval_pairs or "N/A")
+                        + ". After-calibration figures include unchanged warm-up days. "
+                        + (
+                            f"Scoring hour-weighted coverage rises from "
+                            f"{scoring_before:.1%} to {scoring_after:.1%}. "
+                            if scoring_before is not None and scoring_after is not None
+                            else ""
+                        )
+                        + "Calibration expands intervals from prior-day residuals only and "
+                          "never narrows them; September–November and December stay below "
+                          "nominal because past residuals cannot anticipate the vacancy shift."
+                    ),
+                    "severity": "high",
+                },
+                {
+                    "label": "Learned vs best baseline",
+                    "value": (
+                        " · ".join(
+                            f"{row['label']} {row['wins']}/{row['paired_folds']}"
+                            for row in common_stats if row["paired_folds"]
+                        ) or "N/A"
+                    ),
+                    "detail": (
+                        "Strict common-hours mask; a win is lower MAE than that fold's best "
+                        f"baseline. {common_pairs or 'N/A'}. Only "
+                        f"{total_significant_wins} of {total_wins} fold-level wins reach "
+                        "p<0.05."
+                        + (
+                            " Every learned model loses badly to persistence in December."
+                            if december_all_losses else ""
+                        )
+                        + " No learned model is reliably better than the best baseline."
                     ),
                     "severity": "high",
                 },
@@ -854,12 +952,14 @@ def _build_limitations():
                 },
                 {
                     "label": "Tuning",
-                    "value": "train-only per fold",
+                    "value": "frozen once, pre-scoring",
                     "detail": (
-                        "Optuna trials run inside each fold's training window; no test fold "
-                        "chooses a parameter, so hyperparameters differ by fold by design."
+                        "One 30-trial Optuna study on 2016-12-14 → 2017-05-31, a window that "
+                        "ends before every scoring test month; the same parameters are used in "
+                        "every fold. There is no per-fold Optuna and no test-fold parameter "
+                        "selection. The quantile models keep fixed untuned defaults."
                     ),
-                    "severity": "medium",
+                    "severity": "info",
                 },
                 {
                     "label": "Explainability",
@@ -923,9 +1023,31 @@ def _build_limitations():
         {
             "title": "Intervals are not guarantees",
             "detail": (
-                "P10–P90 bands are model output, not calibrated probability statements"
-                + (f"; the worst measured coverage is {worst_coverage['interval_coverage']:.1%} "
-                   f"against 80% nominal." if worst_coverage else ".")
+                "P10–P90 bands are model output, not guaranteed bounds. Rolling CQR raises "
+                "hour-weighted scoring coverage from "
+                + (f"{scoring_before:.1%} to {scoring_after:.1%}"
+                   if scoring_before is not None and scoring_after is not None else "its raw level")
+                + ", but the worst fold reaches only "
+                + (f"{worst_after['interval_after_coverage']:.1%} after calibration "
+                   f"({worst_after['label']}) " if worst_after else "N/A ")
+                + "against 80% nominal. A prior-day window cannot anticipate a regime break "
+                "that starts inside the scored fold."
+            ),
+        },
+        {
+            "title": "No reliable learned-model winner",
+            "detail": (
+                "On the strict common-hours mask, "
+                + (" · ".join(
+                    f"{row['label']} beats the fold's best baseline in "
+                    f"{row['wins']} of {row['paired_folds']} scoring folds"
+                    for row in common_stats if row["paired_folds"]
+                ) or "no learned model was paired with a best baseline")
+                + f", but only {total_significant_wins} of {total_wins} fold-level wins "
+                  "reach p<0.05"
+                + (" and every learned model loses badly in December"
+                   if december_all_losses else "")
+                + ". The fold-mean ranking is descriptive, not a deployment recommendation."
             ),
         },
         {
@@ -953,6 +1075,12 @@ def _build_limitations():
         ),
         "groups": groups,
         "folds": fold_rows,
+        "interval_rule": (
+            "raw P10–P90 coverage and coverage after rolling conformalized quantile "
+            "regression; each test day is expanded by the 80% quantile of prior 28 "
+            "days' conformity scores, the first 7 days are warm-up, and calibration "
+            "never narrows an interval"
+        ),
         "caveats": caveats,
         "sources": [
             {"file": "backend/data_quality.json", "generated_at": quality.get("generated_at")},

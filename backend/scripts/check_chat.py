@@ -165,6 +165,41 @@ def _verify_tool_sources(tools, results, quality):
     check("december_stable_count",
           limits["december_inactivity"]["stable_panel_count"],
           quality["stable_panel"]["count"])
+    december_context = limits.get("december_context") or {}
+    check("december_context_mae", december_context.get("mae_wh"), dec_mae,
+          tolerance=1e-2)
+    check("december_context_bias", december_context.get("bias_wh"), dec_bias,
+          tolerance=1e-2)
+
+    conformal = limits["prediction_intervals"].get("conformal")
+    if conformal:
+        pairs = []
+        for fold in folds:
+            interval = fold["intervals"]["xgboost_quantile"]
+            after = fold["intervals"]["conformal"]["after_all_days"]["coverage"]
+            pairs.append((interval["coverage"], after, interval["n"]))
+        total = sum(n for _, _, n in pairs)
+        weighted_before = round(
+            100.0 * sum(before * n for before, _, n in pairs) / total, 2
+        )
+        weighted_after = round(
+            100.0 * sum(after * n for _, after, n in pairs) / total, 2
+        )
+        check(
+            "conformal_before_scoring",
+            conformal["scoring_hour_weighted"]["before_percent"],
+            weighted_before, tolerance=1e-2,
+        )
+        check(
+            "conformal_after_scoring",
+            conformal["scoring_hour_weighted"]["after_percent"],
+            weighted_after, tolerance=1e-2,
+        )
+        check(
+            "conformal_window_days",
+            conformal["window_days"],
+            folds[0]["intervals"]["conformal"]["window_days"],
+        )
 
     errors = tools.error_breakdown(model="xgboost")
     worst_month_label, worst_month_mae, worst_month_n = _worst_bucket(

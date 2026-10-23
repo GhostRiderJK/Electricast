@@ -82,7 +82,13 @@ def build_artifacts():
             "xgboost_quantile": _model(48, 7.2083),
         },
         "intervals": {"xgboost_quantile": {"status": "ok", "n": 48,
-                                           "coverage": 0.75}},
+                                           "coverage": 0.75},
+                      "conformal": {
+                          "status": "ok", "window_days": 28,
+                          "n_days_calibrated": 1, "warmup_days": 1,
+                          "after_all_days": {"coverage": 0.85},
+                          "after_calibrated_days": {"coverage": 0.9},
+                      }},
         "hourly": {
             "columns": COLUMNS,
             "rows": _hourly_rows(7, 100.0, {
@@ -103,7 +109,13 @@ def build_artifacts():
             "xgboost_quantile": _model(48, 11.0),
         },
         "intervals": {"xgboost_quantile": {"status": "ok", "n": 48,
-                                           "coverage": 0.5}},
+                                           "coverage": 0.5},
+                      "conformal": {
+                          "status": "ok", "window_days": 28,
+                          "n_days_calibrated": 1, "warmup_days": 1,
+                          "after_all_days": {"coverage": 0.6},
+                          "after_calibrated_days": {"coverage": 0.65},
+                      }},
         "hourly": {
             "columns": COLUMNS,
             "rows": _hourly_rows(8, 200.0, {
@@ -320,6 +332,14 @@ def test_data_quality_and_limitations(tools):
     assert limits["prediction_intervals"]["nominal_percent"] == 80.0
     assert limits["prediction_intervals"]["worst_fold"]["label"] == "Aug 2017"
     assert limits["prediction_intervals"]["worst_fold"]["coverage_percent"] == 50.0
+    conformal = limits["prediction_intervals"]["conformal"]
+    assert conformal["window_days"] == 28
+    assert conformal["scoring_hour_weighted"] == {
+        "before_percent": 62.5, "after_percent": 72.5,
+    }
+    assert conformal["by_fold"][0]["after_percent"] == 85.0
+    assert conformal["by_fold"][0]["after_calibrated_percent"] == 90.0
+    assert conformal["by_fold"][0]["calibrated_days"] == 1
     assert limits["december_inactivity"]["flagged_count"] == 2
     assert limits["december_inactivity"]["target_hours"] == 500
     summary = limits["december_inactivity"]["summary"]
@@ -437,6 +457,46 @@ def test_service_rejects_answer_that_fails_twice(tools):
         service.ask("Which model is best?", provider=lambda system, user: "It is 999.")
     assert excinfo.value.unsupported == ["999"]
     assert excinfo.value.attempts == 2
+
+
+def test_service_prepends_grounded_period_lead(tools):
+    results, quality = build_artifacts()
+    rows = []
+    for day in (1, 2):
+        for hour in range(24):
+            rows.append([f"2017-12-{day:02d}T{hour:02d}:00", 100.0, 110.0,
+                         120.0, None, 90.0, 100.0, 110.0])
+    results["folds"].append({
+        "id": "2017-12",
+        "test": {"start": "2017-12-01 00:00", "end": "2017-12-02 23:00",
+                 "eval_hours": 48, "eval_days": 2},
+        "models": {
+            "seasonal_naive_24": _model(48, 10.0),
+            "xgboost": _model(48, 20.0),
+            "sarima": _model(0, None, status="no_data"),
+            "xgboost_quantile": _model(48, 20.0),
+        },
+        "hourly": {"columns": COLUMNS, "rows": rows},
+    })
+    tools = ChatTools(results, quality)
+    service = ChatService(tools, settings=make_settings())
+    prompts = []
+
+    def provider(system, user):
+        prompts.append(user)
+        return (
+            "The low load is consistent with vacancy. "
+            "XGBoost has MAE 20.00 Wh in December."
+        )
+
+    result = service.ask("Why is December different?", provider=provider)
+
+    assert "ANSWER FOCUS: the question is about month 12" in prompts[0]
+    assert result["answer"] == (
+        "In Dec 2017, XGBoost has MAE 20.00 Wh and bias 20.00 Wh on 48 hours. "
+        "The low load is consistent with vacancy. "
+        "XGBoost has MAE 20.00 Wh in December."
+    )
 
 
 def test_service_off_topic_answer_needs_no_provider(tools):

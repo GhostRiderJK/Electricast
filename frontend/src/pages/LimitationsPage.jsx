@@ -52,21 +52,22 @@ function GroupCard({ group }) {
   );
 }
 
-function FoldTable({ folds }) {
+function FoldTable({ folds, intervalRule }) {
   return (
     <div style={{ background: "#fff", border: "1px solid #e5e7eb",
       borderRadius: 12, padding: "18px 22px" }}>
       <div style={{ fontSize: 13, fontWeight: 700, color: "#111827",
         fontFamily: "'IBM Plex Mono', monospace" }}>Coverage by fold</div>
       <div style={{ fontSize: 11, color: "#4b5563", margin: "3px 0 12px" }}>
-        Evaluable hours, training-window labels, SARIMA coverage, and measured P10–P90 coverage.
+        Evaluable hours, training-window labels, SARIMA coverage, and measured P10–P90 coverage
+        before and after rolling conformal calibration. "Cal. days" excludes the 7-day warm-up.
       </div>
       <div style={{ overflowX: "auto" }}>
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11,
           fontFamily: "'IBM Plex Mono', monospace" }}>
           <thead>
             <tr style={{ borderBottom: "1px solid #e5e7eb" }}>
-              {["Fold", "Test window", "Evaluable h", "Days", "Train labels", "SARIMA h", "P10–P90"].map((head) => (
+              {["Fold", "Test window", "Evaluable h", "Days", "Train labels", "SARIMA h", "Raw P10–P90", "After CQR", "Cal. days"].map((head) => (
                 <th key={head} scope="col" style={{ textAlign: "left", padding: "7px 10px",
                   fontSize: 9, color: "#4b5563", textTransform: "uppercase",
                   letterSpacing: 0.4, whiteSpace: "nowrap" }}>{head}</th>
@@ -84,15 +85,25 @@ function FoldTable({ folds }) {
                 <td style={{ padding: "7px 10px" }}>{int(fold.eval_days)}</td>
                 <td style={{ padding: "7px 10px" }}>{int(fold.n_train_hours)}</td>
                 <td style={{ padding: "7px 10px" }}>{int(fold.sarima_hours)}</td>
-                <td style={{ padding: "7px 10px", fontWeight: 700,
+                <td style={{ padding: "7px 10px",
                   color: fold.interval_coverage < 0.6 ? "#b91c1c" : "#111827" }}>
                   {pct(fold.interval_coverage)}
                 </td>
+                <td style={{ padding: "7px 10px", fontWeight: 700,
+                  color: fold.interval_after_coverage < 0.6 ? "#b91c1c" : "#111827" }}>
+                  {pct(fold.interval_after_coverage)}
+                </td>
+                <td style={{ padding: "7px 10px" }}>{int(fold.conformal_calibrated_days)}</td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
+      {intervalRule ? (
+        <div style={{ fontSize: 9, color: "#6b7280", marginTop: 10, lineHeight: 1.5 }}>
+          {intervalRule}
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -162,7 +173,7 @@ export default function LimitationsPage() {
       </div>
 
       {data.groups.map((group) => <GroupCard key={group.id} group={group} />)}
-      <FoldTable folds={data.folds} />
+      <FoldTable folds={data.folds} intervalRule={data.interval_rule} />
       <Caveats caveats={data.caveats} />
 
       <div style={{ fontSize: 9, color: "#6b7280", fontFamily: "'IBM Plex Mono', monospace",

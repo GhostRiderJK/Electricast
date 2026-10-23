@@ -866,7 +866,12 @@ class ChatTools:
             test = fold.get("test") or {}
             sarima = (fold.get("models") or {}).get("sarima") or {}
             interval = (fold.get("intervals") or {}).get("xgboost_quantile") or {}
+            conformal = (fold.get("intervals") or {}).get("conformal") or {}
             coverage = interval.get("coverage")
+            after_all = (conformal.get("after_all_days") or {}).get("coverage")
+            after_calibrated = (
+                conformal.get("after_calibrated_days") or {}
+            ).get("coverage")
             fold_rows.append({
                 "id": fold.get("id"),
                 "label": _fold_label(test),
@@ -874,11 +879,21 @@ class ChatTools:
                 "test_end": test.get("end"),
                 "eval_hours": test.get("eval_hours"),
                 "eval_days": test.get("eval_days"),
+                "stress_test": bool(fold.get("stress_test")),
                 "sarima_hours": sarima.get("n") if sarima.get("status") == "ok" else 0,
                 "interval_n": interval.get("n"),
                 "interval_coverage_percent": _round(
                     float(coverage) * 100, 2
                 ) if coverage is not None else None,
+                "interval_after_percent": _round(
+                    float(after_all) * 100, 2
+                ) if after_all is not None else None,
+                "interval_after_calibrated_percent": _round(
+                    float(after_calibrated) * 100, 2
+                ) if after_calibrated is not None else None,
+                "calibrated_days": conformal.get("n_days_calibrated"),
+                "warmup_days": conformal.get("warmup_days"),
+                "conformal_window_days": conformal.get("window_days"),
             })
         total_eval = sum(int(row["eval_hours"] or 0) for row in fold_rows)
         total_sarima = sum(int(row["sarima_hours"] or 0) for row in fold_rows)
@@ -888,6 +903,33 @@ class ChatTools:
             coverage_rows,
             key=lambda row: row["interval_coverage_percent"],
         ) if coverage_rows else None
+        after_rows = [
+            row for row in fold_rows if row["interval_after_percent"] is not None
+        ]
+
+        def _weighted_interval(rows, key):
+            pairs = [
+                (row[key], row["interval_n"]) for row in rows
+                if row.get(key) is not None and row.get("interval_n")
+            ]
+            total = sum(n for _, n in pairs)
+            if not total:
+                return None
+            return _round(sum(value * n for value, n in pairs) / total, 2)
+
+        scoring_rows = [row for row in fold_rows if not row["stress_test"]]
+        weighted_before = _weighted_interval(
+            scoring_rows, "interval_coverage_percent"
+        )
+        weighted_after = _weighted_interval(
+            scoring_rows, "interval_after_percent"
+        )
+        conformal_window = next(
+            (row["conformal_window_days"] for row in fold_rows
+             if row["conformal_window_days"] is not None),
+            None,
+        )
+        has_conformal = bool(after_rows)
         thin_2018 = next(
             (row for row in fold_rows
              if str(row["test_start"] or "").startswith("2018")),
@@ -896,6 +938,16 @@ class ChatTools:
         longest_gap = target.get("longest_gap_hours")
         december_coverage = next(
             (row for row in monthly if row.get("month") == "2017-12"), None
+        )
+        december_fold = next(
+            (fold for fold in self.folds if fold.get("id") == "2017-12"), None
+        )
+        december_models = (december_fold or {}).get("models") or {}
+        december_xgb = december_models.get("xgboost") or {}
+        december_common = (december_fold or {}).get("common_hours") or {}
+        december_best = december_common.get("best_baseline")
+        december_best_metrics = (
+            (december_common.get("models") or {}).get(december_best) or {}
         )
         return {
             "scope": "limitations",
@@ -931,6 +983,36 @@ class ChatTools:
                         "label": worst_coverage["label"],
                         "coverage_percent": worst_coverage["interval_coverage_percent"],
                     } if worst_coverage else None
+                ),
+                "conformal": (
+                    {
+                        "method": (
+                            "rolling conformalized quantile regression on P10-P90 "
+                            "using only prior test days in the same fold"
+                        ),
+                        "window_days": conformal_window,
+                        "by_fold": [
+                            {
+                                "id": row["id"],
+                                "label": row["label"],
+                                "before_percent": row["interval_coverage_percent"],
+                                "after_percent": row["interval_after_percent"],
+                                "after_calibrated_percent":
+                                    row["interval_after_calibrated_percent"],
+                                "calibrated_days": row["calibrated_days"],
+                                "warmup_days": row["warmup_days"],
+                            }
+                            for row in after_rows
+                        ],
+                        "scoring_hour_weighted": {
+                            "before_percent": weighted_before,
+                            "after_percent": weighted_after,
+                        },
+                        "note": (
+                            "Calibration expands intervals only, never narrows them; "
+                            "the first 7 days of each fold keep the raw bounds."
+                        ),
+                    } if has_conformal else None
                 ),
                 "note": "Intervals are calibration diagnostics, not guaranteed bounds.",
             },
@@ -982,6 +1064,23 @@ class ChatTools:
                     "confirmed meter failures."
                 ),
             },
+            "december_context": (
+                {
+                    "model": "xgboost",
+                    "mae_wh": december_xgb.get("MAE"),
+                    "bias_wh": december_xgb.get("bias"),
+                    "n": december_xgb.get("n"),
+                    "common_hours_best_baseline": december_best,
+                    "common_hours_best_mae_wh": december_best_metrics.get("MAE"),
+                    "summary": (
+                        "In Dec 2017, XGBoost has MAE "
+                        f"{december_xgb.get('MAE')} Wh and bias "
+                        f"{december_xgb.get('bias')} Wh on {december_xgb.get('n')} hours; "
+                        f"the common-hours best baseline ({december_best}) has MAE "
+                        f"{december_best_metrics.get('MAE')} Wh."
+                    ),
+                } if december_xgb.get("MAE") is not None else None
+            ),
             "weather": {
                 "available": weather.get("available"),
                 "hours": weather.get("hours"),

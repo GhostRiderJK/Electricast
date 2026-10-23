@@ -271,8 +271,10 @@ On the five scoring folds:
   September–November −18.35) but only July has a day-level p-value below 0.05; June is p = 0.096
   and September–November p = 0.070, and the bootstrap CIs for June and July include zero.
   December is a clear loss (+50.28 Wh, p = 0.011).
-- **No learned point model beats the common-hours best baseline on more than 2 of the 5 scoring
-  folds.** SARIMA's three lower-MAE folds do not translate into three significant wins.
+- **No learned model is reliably better than the common-hours best baseline.** XGBoost and P50
+  beat it in only 2 of 5 scoring folds (June and July, both significant). SARIMA is lower in 3 of
+  5 (June, July, September–November), but only July is significant at 0.05. Every learned model
+  loses badly in December, and none of these fold-level wins is evidence of a general advantage.
 
 The per-model tables (each model on its own available hours) give a friendlier picture for
 SARIMA, which covers only 1,167 of 1,695 hours in September–November and 387 of 548 in December.
@@ -298,6 +300,20 @@ is excluded. `n` is the total evaluable hours across those folds.
 MAE; it is not a significance test and it is not the common-hours comparison. The standard
 deviations are large because December is a regime break: the XGBoost fold MAE ranges from 60.24
 (August) to 168.08 (December).
+
+## Development experiments
+
+Phase 9 tested feature and target changes under the same folds. Only the changes below were
+adopted; the point-model comparisons use the full evaluation mask, not the common-hours mask.
+
+| Variant | Decision | Why |
+|---|---|---|
+| Drop month/day-of-year when training <365 days | **kept** | Helped 4 of 5 scoring folds; most of the gain is December (227.67 → 196.39 Wh untuned; later tuning brought it to 168.08). Three of the four wins are under 0.6 Wh. |
+| Drop weather features | rejected | Helped only 2 of 5 folds (Sep–Nov, Dec) and worsened the five-fold mean. |
+| Same-hour temperature | **ORACLE only** | Reads temperature at the target hour, which is unknown at the 00:00 origin. Diagnostic only; never a reported result. |
+| Level-normalized target (÷ trailing 7-day mean) | rejected | Helped only December (−44.61 Wh) and hurt the other four folds. With the near-zero feature it still helped only 1 of 5. |
+| Frozen pre-scoring Optuna parameters | **kept** | One 30-trial study through 2017-05-31, reused in every fold, lowered the five-fold mean from 107.66 to 102.09 Wh (helped 3 of 5 folds). No per-fold Optuna remains. |
+| Rolling conformal P10–P90 calibration | **kept** | Raises scoring hour-weighted coverage 64.46% → 75.29% without using future actuals; still below nominal in Sep–Dec (see above). |
 
 ## Prediction intervals
 

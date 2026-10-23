@@ -2,13 +2,14 @@
 
 A full-stack dashboard for day-ahead residential electricity load forecasting on the IIT Bombay
 campus apartment dataset (Dec 2016 – Jun 2018, with the backtest concentrated in 2017–18). The
-current evaluation product is a four-fold expanding-window backtest of four naive baselines and
-three learned models: tuned XGBoost, rolling SARIMA, and quantile XGBoost (P10/P50/P90). No LSTM
-is shipped or displayed.
+current evaluation product is a five-fold expanding-window backtest plus a separate 2018 stress
+test, with four naive baselines and three learned models: frozen-parameter XGBoost, rolling
+SARIMA, and quantile XGBoost (P10/P50/P90) with rolling conformal calibration. No LSTM is
+shipped or displayed.
 
 - Backend: FastAPI, pandas, NumPy, scikit-learn, statsmodels, XGBoost
 - Frontend: React 18, Vite 5, Chart.js 4
-- Tests: pytest (52 tests)
+- Tests: pytest (79 tests)
 - Units: Wh internally; the UI labels Wh or divides by 1,000 for kWh
 - Timezone: Asia/Kolkata (IST) throughout
 
@@ -49,7 +50,9 @@ read-only: the backend routes the question to small tools over `results.json` an
 `data_quality.json`, sends only those tool results to the model, and rejects any answer whose
 numbers/dates/times are not traceable to that packet (one retry, then HTTP 502). If the
 artifacts do not contain the answer, the answer says so; off-topic questions are refused
-without calling a model. Conversation history is not sent, and the assistant cannot see
+without calling a model. For month-scoped questions, a grounded opening sentence with that
+month's XGBoost MAE and bias is taken from the tool result, so the default small model cannot
+omit the key error metrics. Conversation history is not sent, and the assistant cannot see
 uploaded files or live data.
 
 Configuration lives in `backend/config.py` and can be overridden by environment variables:
@@ -107,71 +110,100 @@ The outlier cap is fitted on each fold's training window only.
 ## Evaluation protocol
 
 - 24 hourly forecasts per test day, origin 00:00 IST; no test-day label is a forecast input.
-- Evaluation mask: actual present and seasonal naive available. Models are scored on the hours
-  where their own forecast also exists (long-lag baselines and SARIMA have partial coverage);
-  each model's `n` is reported.
-- All models may use only observations before the 00:00 origin. XGBoost features are lagged at
-  least 24 h; SARIMA advances its state with actuals up to each origin.
-- Four expanding-window folds, `train_start` fixed at 2017-05-01.
+- Information set: target observations strictly before the origin. Long-lag baselines use lags of
+  at least 24 h; persistence holds the last observation; SARIMA advances its state with actuals up
+  to each origin. Weather and reporting counts are lagged at least 24 h.
+- Five scoring folds (June, July, August, September–November, December 2017) expand from the
+  earliest valid target hour, 2016-12-14 21:00 IST. May–June 2018 is a stress test after a
+  four-month outage and is excluded from every fold mean.
+- Evaluation mask: actual present and seasonal naive available. Each model is scored on the hours
+  where its own forecast also exists; `n` is reported. The common-hours table intersects the
+  evaluation mask with **all seven** models, so its rows are strictly like-for-like.
 - Metrics: MAE, RMSE, WAPE, MASE, bias, R², sMAPE; MASE scale is the mean absolute
   seasonal (24 h) difference over valid training pairs.
 - Best baseline = lowest MASE on the all-four-baseline mask when it covers ≥50% of the
   evaluation hours, otherwise on the evaluation mask.
-- Significance: two-sided Wilcoxon signed-rank on paired absolute errors against the best
-  baseline. p-values are unadjusted and not a model-selection procedure.
+- Significance: absolute errors are aggregated to daily MAE per IST day; a paired Wilcoxon
+  signed-rank test runs on daily MAE differences against the common-hours best baseline, with a
+  95% block-bootstrap CI of the hour-weighted MAE difference (2,000 resamples of 7-day blocks).
+  p-values are unadjusted and are not a model-selection procedure.
+- Tuning: the point XGBoost parameters are frozen from one Optuna study on 2016-12-14 →
+  2017-05-31, which ends before every scoring test month. There is no per-fold Optuna and no
+  test-fold selection. Annual calendar features are dropped when a fold's training span is under
+  365 days.
+- Intervals: the raw P10–P90 band is recalibrated per test day by rolling conformalized quantile
+  regression using the prior 28 test days in the same fold (7-day warm-up, expansion only).
 
 | Fold | Train window | Test window | Eval hours | Eval days |
 |---|---|---|---:|---:|
-| 2017-07 | 2017-05-01 → 2017-06-30 | 2017-07-01 → 2017-07-31 | 744 | 31 |
-| 2017-08 | 2017-05-01 → 2017-07-31 | 2017-08-01 → 2017-08-31 | 744 | 31 |
-| 2017-09_12 | 2017-05-01 → 2017-08-31 | 2017-09-01 → 2017-12-31 | 2,243 | 102 |
-| 2018-05_06 | 2017-05-01 → 2017-12-31 | 2018-05-01 → 2018-06-04 | 182 | 8 |
+| 2017-06 | 2016-12-14 21:00 → 2017-05-31 | 2017-06-01 → 2017-06-30 | 720 | 30 |
+| 2017-07 | 2016-12-14 21:00 → 2017-06-30 | 2017-07-01 → 2017-07-31 | 744 | 31 |
+| 2017-08 | 2016-12-14 21:00 → 2017-07-31 | 2017-08-01 → 2017-08-31 | 744 | 31 |
+| 2017-09_11 | 2016-12-14 21:00 → 2017-08-31 | 2017-09-01 → 2017-11-30 | 1,695 | 76 |
+| 2017-12 | 2016-12-14 21:00 → 2017-11-30 | 2017-12-01 → 2017-12-31 | 548 | 26 |
+| 2018-05_06 (stress) | 2016-12-14 21:00 → 2017-12-31 | 2018-05-01 → 2018-06-04 | 182 | 8 |
 
 ## Results
 
-Fold means are unweighted across the folds where each model has data; `n` is the total number
-of evaluable hours. Full per-fold tables and significance tests are in [RESULTS.md](RESULTS.md);
-the machine-readable source is `backend/results.json`.
+Fold means are unweighted across the five scoring folds; `n` is the total evaluable hours. The
+2018 stress test is excluded from every aggregate. Full per-fold tables, common-hours results,
+day-level p-values and interval coverage are in [RESULTS.md](RESULTS.md); the machine-readable
+source is `backend/results.json`.
 
-| Model | Folds | Eval hours | MAE (Wh) | RMSE (Wh) | WAPE % | MASE | R² |
-|---|---:|---:|---:|---:|---:|---:|---:|
-| Persistence | 4 | 3,913 | 154.03 ± 80.60 | 201.74 | 42.19 | 1.710 | −0.917 |
-| Seasonal naive 24 h | 4 | 3,913 | 104.10 ± 32.84 | 151.95 | 31.23 | 1.193 | 0.018 |
-| Same hour last week | 4 | 3,453 | 189.14 ± 141.73 | 236.34 | 51.07 | 2.079 | −0.850 |
-| Mean of 4 same weekdays | 3 | 2,778 | 104.48 ± 56.40 | 131.97 | 41.69 | 1.282 | 0.163 |
-| XGBoost | 4 | 3,913 | 104.21 ± 49.89 | 135.88 | 32.70 | 1.204 | 0.227 |
-| SARIMA | 4 | 3,080 | 81.07 ± 21.25 | 110.72 | 24.08 | 0.934 | 0.526 |
-| Quantile XGBoost (P50) | 4 | 3,913 | 99.91 ± 46.20 | 130.69 | 31.33 | 1.156 | 0.281 |
+| Model | Folds | Eval hours | MAE (Wh) | RMSE (Wh) | WAPE % | MASE | R² | Beats seasonal naive |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| Persistence | 5 | 4,451 | 126.70 ± 63.27 | 174.71 | 42.92 | 1.316 | −0.635 | 2/5 |
+| Seasonal naive 24 h | 5 | 4,451 | 91.54 ± 33.96 | 137.46 | 38.29 | 0.958 | 0.057 | reference |
+| Same hour last week | 5 | 4,135 | 137.39 ± 57.19 | 184.72 | 70.70 | 1.417 | −0.754 | 1/5 |
+| Mean of 4 same weekdays | 5 | 3,498 | 116.67 ± 51.59 | 145.34 | 65.43 | 1.196 | −0.107 | 1/5 |
+| XGBoost (frozen) | 5 | 4,451 | 102.09 ± 50.20 | 129.53 | 56.72 | 1.047 | 0.087 | 4/5 |
+| SARIMA | 5 | 3,762 | 81.70 ± 20.35 | 110.10 | 41.83 | 0.843 | 0.399 | 4/5 |
+| Quantile XGBoost (P50) | 5 | 4,451 | 102.50 ± 51.39 | 130.56 | 57.34 | 1.051 | 0.059 | 4/5 |
 
 Reading the table:
 
-- SARIMA has the lowest MAE and MASE on the pooled folds and beats seasonal naive on all four
-  folds, but its 2018 score covers only 38 of the 182 evaluation hours: it needs history that
-  the Jan–Apr 2018 gap removed before it can forecast. Its fold-mean advantage is not equally
+- SARIMA has the lowest fold-mean MAE, but it is scored on 3,762 of 4,451 hours: the January–April
+  2018 gap removes most of its 2018 forecasts, and its fold-mean advantage is not equally
   supported in every fold.
-- XGBoost and the P50 quantile model beat seasonal naive on three of four folds; against the
-  per-fold best baseline they are significantly better only in July 2017.
-- The 2018 fold has 182 evaluable hours across 8 days; treat it as indicative, not precise.
-- No model is uniformly best. July favors SARIMA/P50, the Aug fold favors the mean of four
-  same weekdays (learned models are not significantly different), and Sep–Dec is difficult for
-  every model.
+- On the **strict common-hours** mask (all seven models on exactly the same hours), XGBoost and
+  P50 have lower MAE than the fold's best baseline only in June and July; SARIMA is lower in
+  June, July and September–November, but only July reaches p < 0.05. Every learned model loses
+  badly to persistence in December.
+- **No learned model is reliably better than the best baseline on common hours.** The fold-mean
+  ranking is descriptive, not a deployment recommendation.
+- August favors the mean of four same weekdays; the learned models are not significantly
+  different there. December is a vacancy regime where the target level collapses and every
+  learned model carries a large positive bias.
+- Raw P10–P90 coverage is 64.46% hour-weighted on the scoring folds (nominal 80%). Rolling
+  conformal calibration raises it to 75.29%, but September–November and December remain
+  undercovered because prior-day residuals cannot anticipate the vacancy shift.
 
 ## Models
 
-**XGBoost (point forecast).** Direct day-ahead model with 48 features: target lags 24–47, 168
-and 336 h; rolling statistics over hours 24–47; calendar, holiday and semester flags;
-n_reporting lagged by 24 h; and Open-Meteo weather variables lagged by 24 h. Hyperparameters
-are tuned with Optuna on a time-series split inside each fold's training window; early stopping
-uses a train-side validation slice. Labels are clipped with a train-only Q3 + 3·IQR cap.
-Feature gains are shown on the Explain page.
+**XGBoost (point forecast).** Direct day-ahead model with target lags 24–47, 168 and 336 h;
+rolling statistics over hours 24–47; calendar, holiday and semester flags; `n_reporting` lagged
+by 24 h; and Open-Meteo weather variables lagged by 24 h. Hyperparameters are frozen from one
+Optuna study on 2016-12-14 → 2017-05-31 and reused in every fold; there is no per-fold Optuna.
+Annual calendar features (`month`, day-of-year) are dropped when the training span is under
+365 days. Labels are clipped with a train-only Q3 + 3·IQR cap. Feature gains are shown on the
+Explain page.
 
 **SARIMA.** Order (1,0,1)(0,1,1,24), refit weekly on the trailing 60 days of the gap-handled
 target and advanced daily using only actuals available before each origin. A recovery refit
 runs after coverage gaps. Prediction intervals are not reported for SARIMA.
 
 **Quantile XGBoost.** Three models with `reg:quantileerror` at 0.1 / 0.5 / 0.9 on the same
-features and cap as XGBoost. P10–P90 coverage and pinball loss are reported per fold in
-`RESULTS.md`; the interval undercovers in the Sep–Dec fold.
+features and cap as XGBoost; P50 is also scored as a point forecast. The raw P10–P90 interval is
+recalibrated per test day by rolling conformalized quantile regression using only the prior 28
+test days in the same fold (80% conformity quantile, 7-day warm-up, expansion only). Raw and
+calibrated coverage and pinball loss are reported per fold in `RESULTS.md`.
+
+**Phase 9 experiments (not all adopted).** Removing annual calendar features helped 4 of 5
+scoring folds and is kept. Removing weather helped only 2 of 5 and is not adopted. A same-hour
+temperature variant is labeled **ORACLE**, is diagnostic only, and is never presented as a real
+result. Level-normalizing the target by its trailing 7-day mean helped only December and is not
+adopted. Frozen pre-scoring tuning improved the five-fold point-XGBoost mean from 107.66 to
+102.09 Wh and is adopted. None of these changes fixes the December vacancy regime.
 
 **Baselines.** Persistence (last value before the day, held flat), seasonal naive (same hour
 24 h earlier), same hour last week, and the mean of the last four same weekdays.
@@ -202,7 +234,7 @@ with an explicit reason instead of metrics.
 | Page | Content |
 |---|---|
 | EDA | 2017 aggregate hourly/daily/monthly/yearly profiles and hour×month heatmap |
-| Predictions | Four-fold backtest day picker, XGBoost/SARIMA/P50 forecasts, P10–P90 band, error by hour/month, worst days |
+| Predictions | Six-fold backtest day picker (five scoring + 2018 stress), XGBoost/SARIMA/P50 forecasts, P10–P90 band, error by hour/month, worst days |
 | Weekly | Legacy 2017 weekday/weekend profile per model (from `model_results.json`) |
 | Model Metrics | Fold mean ± std table and "beats seasonal naive?" column from `/api/backtest/summary` |
 | Explain | XGBoost gain importance and per-fold residual plots |
@@ -271,10 +303,10 @@ make test
 # or: python -m pytest backend/tests -q
 ```
 
-The 52 tests cover metric math and guards, the day-ahead split, lag/leakage rules, gap
-handling, upload parsing/aggregation, and the assistant's tool outputs, planner, numeric
-guard, retries, and provider payloads. They use synthetic series only and do not need the
-network or the campus CSVs.
+The 79 tests cover metric math and guards, day-level significance and bootstrap, conformal
+calibration, the day-ahead split, lag/leakage rules, gap handling, upload parsing/aggregation,
+and the assistant's tool outputs, planner, numeric guard, retries, and provider payloads. They
+use synthetic series only and do not need the network or the campus CSVs.
 
 The scripted assistant check can run without a provider (stub answers built from tool output)
 or against the configured backend:
@@ -286,22 +318,29 @@ python backend/scripts/check_chat.py --live   # requires a reachable provider
 
 ## Documentation
 
-- [RESULTS.md](RESULTS.md) — protocol, per-fold metrics, significance, intervals
+- [RESULTS.md](RESULTS.md) — protocol, per-fold metrics, common hours, significance, conformal intervals
 - [CHECKPOINT_DATA.md](CHECKPOINT_DATA.md) — data-quality checkpoint
 - [CHECKPOINT_EVAL.md](CHECKPOINT_EVAL.md) — baseline-only evaluation checkpoint
 - [CHECKPOINT_MODELS.md](CHECKPOINT_MODELS.md) — learned-model checkpoint
+- [CHECKPOINT_PHASE9.md](CHECKPOINT_PHASE9.md) — Phase 9 history/feature/tuning checkpoint
 - [DECISIONS.md](DECISIONS.md) — design decisions and conservatism calls
 - [PROGRESS.md](PROGRESS.md) — per-item work log and evidence
 - [FINAL_REPORT.md](FINAL_REPORT.md) — summary of the improvement pass
 
 ## Limitations
 
-- Four folds only; the 2018 fold has 182 evaluable hours and 38 SARIMA hours.
+- Five scoring folds only; the 2018 stress test has 182 evaluable hours and 38 SARIMA hours, and
+  is excluded from every mean.
 - The target is a per-reporting-apartment mean over 24 stable apartments; December 2017
   includes suspected vacancies.
-- No test-fold tuning or test-window refitting is performed, but the fold set is small, so
-  the fold-mean ranking is sensitive to the 2018 fold.
-- P10–P90 intervals undercover in Sep–Dec (44.8%) and are only approximately calibrated.
+- No test-fold tuning or test-window refitting is performed. The fold set is small, so fold-mean
+  rankings are sensitive to the composition of the folds.
+- **No learned model is reliably better than the best baseline on common hours.** XGBoost and P50
+  win only June and July; SARIMA has lower MAE on 3 of 5 scoring folds but only July is
+  significant at 0.05; every learned model loses badly in December.
+- Raw P10–P90 coverage is 64.46% hour-weighted on the scoring folds; rolling conformal
+  calibration raises it to 75.29%, but September–November and December remain below 80% because
+  prior-day residuals cannot anticipate the vacancy regime shift. Calibration never narrows.
 - Weather comes from one Open-Meteo grid point (Mumbai) and is not building-level.
 - EDA and Weekly still show the legacy 2017 aggregate and are not the backtest numbers.
 - The assistant is single-turn and artifacts-only. Its numeric guard checks provenance, not
