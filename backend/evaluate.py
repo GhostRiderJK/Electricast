@@ -24,6 +24,48 @@ BASELINE_DESCRIPTIONS = {
     "mean_last_4_same_weekdays": "mean of the same hour on the previous four same weekdays",
 }
 
+FOLDS = (
+    {
+        "id": "2017-07",
+        "train_start": "2017-05-01 00:00",
+        "train_end": "2017-06-30 23:00",
+        "test_start": "2017-07-01 00:00",
+        "test_end": "2017-07-31 23:00",
+    },
+    {
+        "id": "2017-08",
+        "train_start": "2017-05-01 00:00",
+        "train_end": "2017-07-31 23:00",
+        "test_start": "2017-08-01 00:00",
+        "test_end": "2017-08-31 23:00",
+    },
+    {
+        "id": "2017-09_12",
+        "train_start": "2017-05-01 00:00",
+        "train_end": "2017-08-31 23:00",
+        "test_start": "2017-09-01 00:00",
+        "test_end": "2017-12-31 23:00",
+    },
+    {
+        "id": "2018-05_06",
+        "train_start": "2017-05-01 00:00",
+        "train_end": "2017-12-31 23:00",
+        "test_start": "2018-05-01 00:00",
+        "test_end": "2018-06-04 23:00",
+    },
+)
+
+PROTOCOL = {
+    "timezone": dp.TZ,
+    "target": "mean hourly load per reporting stable apartment (Wh)",
+    "forecast": "24 hourly values for every test day",
+    "origin": "00:00 IST of the test day",
+    "information_set": "target observations strictly before the origin; lag baselines use >=24 h lags",
+    "folds": "expanding window with train_start fixed at 2017-05-01; one fold tests Sep-Dec 2017 and one tests May-Jun 2018",
+    "evaluation_mask": "target present and seasonal_naive_24 available",
+    "mase_scale": "mean absolute 24-h seasonal difference over valid training pairs",
+}
+
 
 def load_target():
     """Return the gap-handled target series (Wh per reporting apartment)."""
@@ -103,6 +145,47 @@ def compute_metrics(actual, pred, scale=None):
     }
 
 
+def evaluate_fold(series, fold):
+    """Score all baselines on one day-ahead fold.
+
+    The evaluation mask is every hour with a target value and a seasonal-naive
+    forecast, so all models are scored on the same hours within a fold.
+    """
+    train = series.loc[fold["train_start"]:fold["train_end"]]
+    scale = mase_scale(train)
+    actual = series.reindex(test_hours(fold["test_start"], fold["test_end"]))
+    preds = baseline_forecasts(series, fold["test_start"], fold["test_end"])
+    mask = actual.notna() & preds["seasonal_naive_24"].notna()
+
+    models = {}
+    for name in BASELINES:
+        models[name] = compute_metrics(actual[mask], preds[name][mask], scale)
+
+    return {
+        "id": fold["id"],
+        "train": {
+            "start": fold["train_start"],
+            "end": fold["train_end"],
+            "hours": int(len(train)),
+            "valid_hours": int(train.notna().sum()),
+        },
+        "test": {
+            "start": fold["test_start"],
+            "end": fold["test_end"],
+            "clock_hours": int(len(actual)),
+            "target_valid_hours": int(actual.notna().sum()),
+            "eval_hours": int(mask.sum()),
+            "eval_days": int(mask.index[mask].floor("D").nunique()),
+        },
+        "mase_scale": _clean(scale, 4),
+        "models": models,
+    }
+
+
+def run_backtest(series):
+    return [evaluate_fold(series, fold) for fold in FOLDS]
+
+
 def baseline_forecasts(series, start, end):
     """Forecast every hour in [start, end] with each baseline.
 
@@ -140,20 +223,21 @@ def _show(value, digits=2):
 
 def main():
     series = load_target()
-    start, end = "2017-07-01", "2017-07-31 23:00"
-    preds = baseline_forecasts(series, start, end)
-    actual = series.reindex(test_hours(start, end))
-    train = series.loc[:"2017-06-30 23:00"]
-    scale = mase_scale(train)
-    print(f"Baselines {start} -> {end}, target mean {actual.mean():.2f} Wh; "
-          f"MASE scale {_show(scale)} Wh")
-    print(f"{'model':28s} {'n':>5s} {'MAE':>8s} {'RMSE':>8s} {'WAPE%':>8s} "
-          f"{'MASE':>7s} {'bias':>8s} {'R2':>8s} {'sMAPE%':>8s}")
-    for name in BASELINES:
-        m = compute_metrics(actual, preds[name], scale)
-        print(f"{name:28s} {m['n']:5d} {_show(m['MAE']):>8s} {_show(m['RMSE']):>8s} "
-              f"{_show(m['WAPE']):>8s} {_show(m['MASE'], 3):>7s} {_show(m['bias']):>8s} "
-              f"{_show(m['R2'], 4):>8s} {_show(m['sMAPE']):>8s}")
+    print(f"Day-ahead backtest, {len(FOLDS)} expanding folds, origin 00:00 IST")
+    for fold in run_backtest(series):
+        test = fold["test"]
+        print(f"\n== {fold['id']}: train {fold['train']['hours']} h "
+              f"({fold['train']['valid_hours']} valid), test {test['clock_hours']} h "
+              f"({test['target_valid_hours']} target), eval {test['eval_hours']} h / "
+              f"{test['eval_days']} d, MASE scale {_show(fold['mase_scale'])}")
+        print(f"{'model':28s} {'n':>5s} {'MAE':>8s} {'RMSE':>8s} {'WAPE%':>8s} "
+              f"{'MASE':>7s} {'bias':>8s} {'R2':>8s} {'sMAPE%':>8s}")
+        for name in BASELINES:
+            m = fold["models"][name]
+            print(f"{name:28s} {m['n']:5d} {_show(m['MAE']):>8s} {_show(m['RMSE']):>8s} "
+                  f"{_show(m['WAPE']):>8s} {_show(m['MASE'], 3):>7s} "
+                  f"{_show(m['bias']):>8s} {_show(m['R2'], 4):>8s} "
+                  f"{_show(m['sMAPE']):>8s}")
 
 
 if __name__ == "__main__":

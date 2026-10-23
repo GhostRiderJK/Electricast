@@ -133,7 +133,13 @@ One entry per iteration: date, item id, change, evidence, numbers.
 ## 2026-10-23 — 3.2 Metrics
 
 - Added `compute_metrics()` (RMSE, MAE, WAPE, MASE, bias, R², guarded sMAPE) and `mase_scale()`, which uses the mean absolute 24-h seasonal difference over valid training pairs. Pairs are aligned on timestamps and dropped when actual or prediction is missing.
-- Evidence: hand-checked example [10,20,30] vs [12,18,33] gives MAE 2.3333, RMSE 2.3805, WAPE 11.6667%, sMAPE 12.744%, bias 1.0, R² 0.915, MASE 0.4667 (scale 5); perfect forecasts give zeros and R²=1; all-zero actuals give sMAPE 0 with WAPE/R²/MASE null; NaNs reduce n correctly; a ramp has MASE scale 24. July 2017 baseline table: seasonal naive MAE 75.01, MASE 0.777, R² 0.2375 vs persistence MAE 119.56, R² -0.7352.
+- Evidence: hand-checked example [10,20,30] vs [12,18,33] gives MAE 2.3333, RMSE 2.3805, WAPE 11.6667%, sMAPE 12.744%, bias 1.0, R² 0.915, MASE 0.4667 (scale 5); perfect forecasts give zeros and R²=1; all-zero actuals give sMAPE 0 with WAPE/R²/MASE null; NaNs reduce n correctly; a ramp has MASE scale 24. July 2017 baseline table: seasonal naive MAE 75.01, R² 0.2375 vs persistence MAE 119.56, R² -0.7352 (the fold-window MASE scale is defined in 3.3).
+
+## 2026-10-23 — 3.3 Day-ahead backtest
+
+- Added `FOLDS`, `PROTOCOL`, `evaluate_fold()` and `run_backtest()`: four expanding folds with train_start fixed at 2017-05-01 — test Jul 2017, Aug 2017, Sep–Dec 2017, and May–Jun 2018. Forecast origin is 00:00 IST each test day; the evaluation mask requires a target and a seasonal-naive-24 forecast, so all models share the same hours within a fold.
+- Evidence: eval hours are 744 / 744 / 2,243 / 182; target-valid hours are 744 / 744 / 2,374 / 214. Best baseline by MAE is seasonal naive in Jul (75.01), mean-of-4 in Aug (58.93), persistence in Sep–Dec (116.21) and seasonal naive in May–Jun (132.87). Replacing every value from a test day's origin onward with 1e9 leaves that day's forecasts unchanged for all four baselines (6 sample days); fold boundaries satisfy train_end < test_start and expand monotonically.
+
 
 
 
