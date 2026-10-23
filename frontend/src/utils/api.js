@@ -32,14 +32,48 @@ export const api = {
   predWeeklyPattern:  (signal) => get("/api/predictions/weekly_pattern", signal),
   predMonthlyErrors:  (signal) => get("/api/predictions/monthly_errors", signal),
 
-  uploadValidate: async (file) => {
+  uploadOptions:     (signal) => get("/api/upload/options", signal),
+
+  uploadPreview: async (blob, filename) => {
     const form = new FormData();
-    form.append("file", file);
-    const res = await fetch(`${BASE}/api/upload-validate`, { method: "POST", body: form });
+    form.append("file", blob, filename);
+    const res = await fetch(`${BASE}/api/upload/preview`, { method: "POST", body: form });
     if (!res.ok) {
       const err = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
-      throw new Error(err.detail || err.error || `Upload failed: ${res.status}`);
+      throw new Error(err.detail || err.error || `Preview failed: ${res.status}`);
     }
     return res.json();
   },
+
+  uploadValidate: (file, mapping, onProgress) => new Promise((resolve, reject) => {
+    const form = new FormData();
+    form.append("file", file);
+    Object.entries(mapping).forEach(([key, value]) => form.append(key, value ?? ""));
+
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", `${BASE}/api/upload/validate`);
+    xhr.timeout = 10 * 60 * 1000;
+    xhr.upload.onprogress = (event) => {
+      if (event.lengthComputable && onProgress) {
+        onProgress(Math.round((event.loaded / event.total) * 100));
+      }
+    };
+    xhr.onload = () => {
+      let body = null;
+      try { body = JSON.parse(xhr.responseText); } catch { /* non-JSON error page */ }
+      if (xhr.status >= 200 && xhr.status < 300) {
+        onProgress?.(100);
+        resolve(body);
+      } else {
+        const error = new Error(
+          body?.detail || body?.error || `Upload failed: ${xhr.status}`
+        );
+        error.validation = body?.validation || null;
+        reject(error);
+      }
+    };
+    xhr.onerror = () => reject(new Error("Network error while uploading the CSV."));
+    xhr.ontimeout = () => reject(new Error("Upload or evaluation timed out after 10 minutes."));
+    xhr.send(form);
+  }),
 };

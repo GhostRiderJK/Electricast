@@ -5,15 +5,15 @@ Provides upload endpoint for validating trained models on new datasets.
 """
 
 import os
-import io
 import json
 import numpy as np
 import pandas as pd
-from fastapi import FastAPI, Query, UploadFile, File
+from fastapi import FastAPI, Query, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from typing import Optional
-from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
+
+import upload_validation as uploads
 
 app = FastAPI(
     title="Electricity Forecast API",
@@ -1014,257 +1014,77 @@ def monthly_errors():
 
 
 # ─────────────────────────────────────────────────────────────────
-# Upload validation — run trained models on user-uploaded dataset
+# Upload & validate — column-mapped CSV, Phase 3 protocol
 # ─────────────────────────────────────────────────────────────────
 
-MODELS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "models")
 
-MAX_UPLOAD_SIZE = 50 * 1024 * 1024  # 50 MB
-
-
-def _load_xgb_model():
-    """Load saved XGBoost model and feature columns."""
-    import xgboost as xgb
-
-    model = xgb.XGBRegressor()
-    model.load_model(os.path.join(MODELS_DIR, "xgboost_model.json"))
-
-    with open(os.path.join(MODELS_DIR, "xgb_feature_cols.json")) as f:
-        feat_cols = json.load(f)
-
-    return model, feat_cols
+def _require_csv(filename):
+    if not filename or not filename.lower().endswith(".csv"):
+        raise uploads.UploadError("Please upload a .csv file.")
 
 
-def _load_train_stats():
-    with open(os.path.join(MODELS_DIR, "train_stats.json")) as f:
-        return json.load(f)
-
-
-def _build_xgb_features(df, target_col="W"):
-    """Build XGBoost features matching train_models.py."""
-    d = df[[target_col]].copy()
-    d.columns = ["W"]
-
-    for lag in [1, 2, 3, 6, 12, 24, 48, 168]:
-        d[f"lag_{lag}"] = d["W"].shift(lag)
-    for w in [6, 12, 24]:
-        d[f"roll_mean_{w}"] = d["W"].shift(1).rolling(w).mean()
-        d[f"roll_std_{w}"] = d["W"].shift(1).rolling(w).std()
-
-    d["hour"] = df.index.hour
-    d["dayofweek"] = df.index.dayofweek
-    d["month"] = df.index.month
-    d["hour_sin"] = np.sin(2 * np.pi * df.index.hour / 24)
-    d["hour_cos"] = np.cos(2 * np.pi * df.index.hour / 24)
-    d["month_sin"] = np.sin(2 * np.pi * df.index.month / 12)
-    d["month_cos"] = np.cos(2 * np.pi * df.index.month / 12)
-    d["is_weekend"] = (df.index.dayofweek >= 5).astype(int)
-
-    return d.dropna()
-
-
-def _smape(a, p):
-    denom = np.abs(a) + np.abs(p)
-    mask = denom > 0
-    if not mask.any():
-        return 0.0
-    return round(float(np.mean(2 * np.abs(a[mask] - p[mask]) / denom[mask]) * 100), 2)
-
-
-def _calc_metrics(y_true, y_pred):
-    return {
-        "R2": round(float(r2_score(y_true, y_pred)), 4),
-        "RMSE": round(float(np.sqrt(mean_squared_error(y_true, y_pred))), 1),
-        "MAE": round(float(mean_absolute_error(y_true, y_pred)), 1),
-        "sMAPE": _smape(y_true, y_pred),
-    }
-
-
-def _process_smart_home_csv(raw_bytes: bytes):
-    """Parse smart_home_dataset CSV, convert to IST hourly, return first 6 months."""
-    df = pd.read_csv(io.BytesIO(raw_bytes))
-
-    required = {"Unix Timestamp", "Energy Consumption (kWh)"}
-    if not required.issubset(set(df.columns)):
-        raise ValueError(
-            f"CSV must contain columns: {required}. Found: {list(df.columns)}"
+def _read_limited(file):
+    declared = getattr(file, "size", None)
+    if declared is not None and declared > uploads.MAX_UPLOAD_BYTES:
+        raise uploads.UploadError(
+            f"File too large (max {uploads.MAX_UPLOAD_BYTES // (1024 * 1024)} MB)."
         )
-
-    df["datetime"] = pd.to_datetime(df["Unix Timestamp"], unit="s", utc=True)
-    # Convert UTC → IST to match training data timezone
-    df["datetime"] = df["datetime"].dt.tz_convert("Asia/Kolkata")
-    df = df.set_index("datetime").sort_index()
-
-    # Resample to hourly (mean consumption per hour)
-    hourly = df[["Energy Consumption (kWh)"]].resample("h").mean()
-    hourly = hourly.interpolate("linear").dropna()
-    hourly.columns = ["W"]
-
-    # Take first 6 months
-    start_year = hourly.index[0].year
-    start_month = hourly.index[0].month
-    # Calculate 6 months forward
-    end_month = start_month + 5
-    end_year = start_year
-    if end_month > 12:
-        end_month -= 12
-        end_year += 1
-    cutoff = f"{end_year}-{end_month:02d}-{pd.Timestamp(end_year, end_month, 1).days_in_month}"
-    first_6m = hourly.loc[:cutoff].copy()
-
-    return first_6m, hourly
+    chunks = []
+    total = 0
+    while True:
+        chunk = file.file.read(1024 * 1024)
+        if not chunk:
+            break
+        total += len(chunk)
+        if total > uploads.MAX_UPLOAD_BYTES:
+            raise uploads.UploadError(
+                f"File too large (max {uploads.MAX_UPLOAD_BYTES // (1024 * 1024)} MB)."
+            )
+        chunks.append(chunk)
+    return b"".join(chunks)
 
 
-@app.post("/api/upload-validate")
-async def upload_validate(file: UploadFile = File(...)):
-    """Upload a smart_home_dataset CSV and validate using models trained on India 2017 H1."""
+@app.get("/api/upload/options")
+def upload_options():
+    return uploads.options_payload()
 
-    # Validate file type
-    if not file.filename or not file.filename.endswith(".csv"):
-        return JSONResponse(status_code=400,
-                            content={"error": "Please upload a CSV file."})
 
-    # Read file with size limit
-    raw = await file.read()
-    if len(raw) > MAX_UPLOAD_SIZE:
-        return JSONResponse(status_code=400,
-                            content={"error": "File too large (max 50 MB)."})
-
-    # Check model artifacts exist (LSTM disabled for now)
-    needed = ["xgboost_model.json", "xgb_feature_cols.json", "train_stats.json"]
-    missing = [f for f in needed if not os.path.exists(os.path.join(MODELS_DIR, f))]
-    if missing:
-        return JSONResponse(status_code=503,
-                            content={"error": f"Model artifacts missing: {missing}. "
-                                     "Run train_models.py first."})
-
+@app.post("/api/upload/preview")
+def upload_preview(file: UploadFile = File(...)):
     try:
-        first_6m, full_hourly = _process_smart_home_csv(raw)
-    except Exception as e:
-        return JSONResponse(status_code=400,
-                            content={"error": f"Failed to parse CSV: {str(e)}"})
+        _require_csv(file.filename)
+        raw = file.file.read(uploads.PREVIEW_BYTES + 1)
+        return uploads.preview_csv(raw[:uploads.PREVIEW_BYTES])
+    except uploads.UploadError as exc:
+        return JSONResponse(status_code=400, content={"error": str(exc)})
 
-    if len(first_6m) < 50:
-        return JSONResponse(status_code=400,
-                            content={"error": "Not enough data in the first 6 months."})
 
-    # Load training stats for scale matching
-    train_stats = _load_train_stats()
-    upload_mean = float(first_6m["W"].mean())
-    upload_std = float(first_6m["W"].std())
-    train_mean = train_stats["mean"]
-    train_std = train_stats["std"]
-
-    # Scale uploaded data to training distribution
-    # This preserves temporal patterns while aligning magnitude
-    scale_factor = train_mean / upload_mean if upload_mean > 0 else 1.0
-    first_6m_scaled = first_6m.copy()
-    first_6m_scaled["W"] = first_6m["W"] * scale_factor
-
-    actual_vals = first_6m["W"].values  # keep original scale for comparison
-    scaled_vals = first_6m_scaled["W"].values
-
-    # ── XGBoost predictions ───────────────────────────────────────
-    xgb_model, xgb_feat_cols = _load_xgb_model()
-
-    df_xgb = _build_xgb_features(first_6m_scaled, target_col="W")
-    # Ensure columns match training
-    for col in xgb_feat_cols:
-        if col not in df_xgb.columns:
-            df_xgb[col] = 0
-    X_upload = df_xgb[xgb_feat_cols]
-
-    xgb_preds_train_scale = xgb_model.predict(X_upload)
-    xgb_preds_train_scale = np.maximum(xgb_preds_train_scale, 0)
-    # Reverse scale
-    xgb_preds = xgb_preds_train_scale / scale_factor
-
-    # ── Align indices ─────────────────────────────────────────────
-    xgb_idx = df_xgb.index
-    common_idx = xgb_idx
-
-    if len(common_idx) == 0:
-        return JSONResponse(status_code=400,
-                            content={"error": "Not enough overlapping data for comparison."})
-
-    actual_s = first_6m["W"].reindex(common_idx)
-    xgb_s = pd.Series(xgb_preds, index=xgb_idx).reindex(common_idx)
-
-    actual_arr = actual_s.values
-    xgb_arr = xgb_s.values
-
-    MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
-                   "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
-
-    to_list = lambda a: [round(float(v), 2) for v in a]
-
-    # ── Monthly comparison ────────────────────────────────────────
-    comp_df = pd.DataFrame({
-        "actual": actual_arr, "xgboost": xgb_arr,
-    }, index=common_idx)
-    comp_df["month"] = comp_df.index.month
-    mg = comp_df.groupby("month").mean()
-    months_present = sorted(mg.index)
-
-    monthly_comparison = {
-        "months": [MONTH_NAMES[m - 1] for m in months_present],
-        "actual": to_list(mg["actual"].values),
-        "xgboost": to_list(mg["xgboost"].values),
-    }
-
-    # ── Daily comparison ──────────────────────────────────────────
-    daily_agg = comp_df[["actual", "xgboost"]].resample("D").mean().dropna()
-
-    daily_comparison = {
-        "labels": [d.strftime("%b %d") for d in daily_agg.index],
-        "actual": to_list(daily_agg["actual"].values),
-        "xgboost": to_list(daily_agg["xgboost"].values),
-    }
-
-    # ── Hourly profile ────────────────────────────────────────────
-    hourly_profile = {
-        "hours": [f"{h:02d}:00" for h in range(24)],
-        "actual": to_list(comp_df.groupby(comp_df.index.hour)["actual"].mean().reindex(range(24), fill_value=0)),
-        "xgboost": to_list(comp_df.groupby(comp_df.index.hour)["xgboost"].mean().reindex(range(24), fill_value=0)),
-    }
-
-    # ── Overall metrics ───────────────────────────────────────────
-    metrics = {
-        "xgboost": _calc_metrics(actual_arr, xgb_arr),
-    }
-
-    # ── Per-month metrics ─────────────────────────────────────────
-    monthly_metrics = {}
-    for m in months_present:
-        m_mask = comp_df["month"] == m
-        m_actual = comp_df.loc[m_mask, "actual"].values
-        m_name = MONTH_NAMES[m - 1]
-        monthly_metrics[m_name] = {}
-        for model_key, m_pred in [("xgboost", comp_df.loc[m_mask, "xgboost"].values)]:
-            monthly_metrics[m_name][model_key] = {
-                "mae": round(float(mean_absolute_error(m_actual, m_pred)), 1),
-                "rmse": round(float(np.sqrt(mean_squared_error(m_actual, m_pred))), 1),
-            }
-
-    # ── Dataset info ──────────────────────────────────────────────
-    dataset_info = {
-        "filename": file.filename,
-        "total_hours": int(len(first_6m)),
-        "validation_hours": int(len(common_idx)),
-        "date_range": (f"{first_6m.index[0].strftime('%b %d, %Y')} – "
-                       f"{first_6m.index[-1].strftime('%b %d, %Y')}"),
-        "timezone_note": ("Smart Home data converted from UTC to IST (UTC+5:30) "
-                          "to match India 2017 training data timezone."),
-        "scale_note": (f"Scale factor applied: {scale_factor:.3f} "
-                       f"(upload mean: {upload_mean:.1f} Wh, train mean: {train_mean:.1f} Wh)"),
-    }
-
-    return {
-        "status": "success",
-        "dataset_info": dataset_info,
-        "monthly_comparison": monthly_comparison,
-        "daily_comparison": daily_comparison,
-        "hourly_profile": hourly_profile,
-        "metrics": metrics,
-        "monthly_metrics": monthly_metrics,
-    }
+@app.post("/api/upload/validate")
+def upload_validate(
+    file: UploadFile = File(...),
+    timestamp_col: str = Form(...),
+    value_col: str = Form(...),
+    series_col: str = Form(""),
+    unit: str = Form("Wh"),
+    timezone: str = Form("UTC"),
+    timestamp_mode: str = Form("auto"),
+):
+    try:
+        _require_csv(file.filename)
+        raw = _read_limited(file)
+        mapping = {
+            "timestamp_col": timestamp_col,
+            "value_col": value_col,
+            "series_col": series_col,
+            "unit": unit,
+            "timezone": timezone,
+            "timestamp_mode": timestamp_mode,
+        }
+        return uploads.validate_and_evaluate(
+            raw, mapping, file.filename, len(raw)
+        )
+    except uploads.UploadError as exc:
+        return JSONResponse(
+            status_code=400,
+            content={"error": str(exc), "validation": exc.report},
+        )

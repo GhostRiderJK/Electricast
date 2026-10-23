@@ -50,9 +50,9 @@ Rules: one task per iteration. Tick [x] only after the VERIFY step passes.
 - [x] 5.4 Limitations panel
 
 ## Phase 6 — Upload & Validate redesign
-- [ ] 6.1 Column mapper, unit and timezone selectors, validation report
-- [ ] 6.2 Run the Phase 3 protocol on uploaded data (baselines, zero-shot, fit-on-60%)
-- [ ] 6.3 Streaming size check, .CSV accepted, progress/error states, results download
+- [x] 6.1 Column mapper, unit and timezone selectors, validation report
+- [x] 6.2 Run the Phase 3 protocol on uploaded data (baselines, zero-shot, fit-on-60%)
+- [x] 6.3 Streaming size check, .CSV accepted, progress/error states, results download
 
 ## Phase 7 — Engineering
 - [ ] 7.1 pytest suite: metrics, split, leakage, gaps
