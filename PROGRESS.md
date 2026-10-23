@@ -87,3 +87,8 @@ One entry per iteration: date, item id, change, evidence, numbers.
 - Added `backend/data_pipeline.py` with `load_apartments()`: reads every `data/*.csv`, validates `TS,W1,W2,W3`, parses UTC timestamps, and returns a per-file report of rows and IST/UTC ranges.
 - Missing/empty/malformed/wrong-schema files are recorded as failures with their exception type; there is no bare or swallowing `except`.
 - Evidence: 39/39 files read, 0 failed, 196,449 rows, range 2016-12-14 15:30 UTC → 2018-06-04 18:00 UTC (2016-12-14 21:00 → 2018-06-04 23:30 IST); a temp-directory test with empty, wrong-column and broken CSV files returned `read_ok=1, failed=3` with `ValueError/ParserError` entries and no crash.
+
+## 2026-10-23 — 2.2 Per-apartment hourly panel
+
+- `apartment_hourly()` sums W1–W3 per row with `min_count=1`, converts UTC to IST, sorts, and resamples to hourly with `sum(min_count=1)`; `build_panel()` combines all 39 apartments and keeps `n_reporting` per hour.
+- Evidence: panel is 12,891 hours × 39 apartments (2016-12-14 21:00 → 2018-06-04 23:00 IST); every apartment's non-null hourly count equals its raw row count (no bucket collisions); `n_reporting` ranges 0–39 (median 23; 26 reporting for 4,085 hours); 5,291 hours have zero apartments, reflecting the Dec-2017→May-2018 hole; 2017-11-26 03:00 IST has 39 reporting apartments with mean 82.34 Wh.

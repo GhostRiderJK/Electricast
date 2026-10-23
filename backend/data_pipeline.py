@@ -35,6 +35,25 @@ def read_apartment_file(path):
     return df
 
 
+def apartment_hourly(df):
+    """Sum the three phases and resample one apartment to IST hours."""
+    timestamps = df["timestamp_utc"].dt.tz_convert(TZ)
+    phase_sum = df[["W1", "W2", "W3"]].sum(axis=1, min_count=1)
+    series = pd.Series(phase_sum.to_numpy(), index=timestamps)
+    series = series.sort_index()
+    return series.resample("h").sum(min_count=1)
+
+
+def build_panel(apartments):
+    """Combine per-apartment hourly series and count reporting apartments."""
+    hourly = {name: apartment_hourly(df) for name, df in apartments.items()}
+    panel = pd.concat(hourly, axis=1).sort_index()
+    panel.index.name = "timestamp_ist"
+    n_reporting = panel.notna().sum(axis=1).astype(int)
+    n_reporting.name = "n_reporting"
+    return panel, n_reporting
+
+
 def load_apartments(data_dir=DATA_DIR):
     """Load every CSV in data_dir and return (apartments, report).
 
