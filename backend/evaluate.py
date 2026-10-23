@@ -45,28 +45,24 @@ LEARNED_MODEL_DESCRIPTIONS = {
 FOLDS = (
     {
         "id": "2017-07",
-        "train_start": "2017-05-01 00:00",
         "train_end": "2017-06-30 23:00",
         "test_start": "2017-07-01 00:00",
         "test_end": "2017-07-31 23:00",
     },
     {
         "id": "2017-08",
-        "train_start": "2017-05-01 00:00",
         "train_end": "2017-07-31 23:00",
         "test_start": "2017-08-01 00:00",
         "test_end": "2017-08-31 23:00",
     },
     {
         "id": "2017-09_12",
-        "train_start": "2017-05-01 00:00",
         "train_end": "2017-08-31 23:00",
         "test_start": "2017-09-01 00:00",
         "test_end": "2017-12-31 23:00",
     },
     {
         "id": "2018-05_06",
-        "train_start": "2017-05-01 00:00",
         "train_end": "2017-12-31 23:00",
         "test_start": "2018-05-01 00:00",
         "test_end": "2018-06-04 23:00",
@@ -79,7 +75,7 @@ PROTOCOL = {
     "forecast": "24 hourly values for every test day",
     "origin": "00:00 IST of the test day",
     "information_set": "target observations strictly before the origin; lag baselines use >=24 h lags",
-    "folds": "expanding window with train_start fixed at 2017-05-01; one fold tests Sep-Dec 2017 and one tests May-Jun 2018",
+    "folds": "expanding window with train_start fixed at the earliest valid target hour (2016-12-14 21:00 IST); one fold tests Sep-Dec 2017 and one tests May-Jun 2018",
     "evaluation_mask": "target present and seasonal_naive_24 available",
     "mase_scale": "mean absolute 24-h seasonal difference over valid training pairs",
     "best_baseline_selection": "lowest MASE on the all-four-baseline mask when it covers >=50% of evaluation hours (and >=24 h); otherwise on the evaluation mask",
@@ -420,9 +416,23 @@ def evaluate_fold(series, fold, reporting=None, weather_frame=None):
     }
 
 
+def history_start(series):
+    """Earliest valid target hour, used as every fold's train_start."""
+    first = series.first_valid_index()
+    if first is None:
+        raise ValueError("target series has no valid hours")
+    return first.strftime("%Y-%m-%d %H:%M")
+
+
 def run_backtest(series, reporting=None, weather_frame=None):
+    start = history_start(series)
     return [
-        evaluate_fold(series, fold, reporting=reporting, weather_frame=weather_frame)
+        evaluate_fold(
+            series,
+            {**fold, "train_start": start},
+            reporting=reporting,
+            weather_frame=weather_frame,
+        )
         for fold in FOLDS
     ]
 

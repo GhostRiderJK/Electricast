@@ -61,3 +61,14 @@ Rules: one task per iteration. Tick [x] only after the VERIFY step passes.
 
 ## Phase 8 — Grounded assistant
 - [x] 8.1 "Ask ElectriCast" chat panel: POST /api/chat with read-only artifact tools, numeric grounding guard, configurable Ollama/Gemini backend, drawer UI, tests and docs
+
+## Phase 9 — Use all history and harder evaluation
+- [x] 9.1 Use all valid history: train_start = earliest valid target hour (Dec 2016) for every fold; report 2016-12-14 → 2017-04-30 valid hours and December vacancy pattern; rerun all folds; keep `results_v1.json`
+- [ ] 9.2 Add Jun 2017 fold (train Dec–May), keep Jul, Aug, Sep–Nov, make Dec 2017 its own fold, relabel 2018 as stress test and exclude it from fold means
+- [ ] 9.3 Feature ablation on the fixed config: drop month/day-of-year when training <12 months, drop weather, oracle same-hour temperature (ORACLE only); MAE per variant per fold; keep variants helping ≥3 folds
+- [ ] 9.4 Level-normalized target: forecast target / trailing 7-day mean, multiply back; add lag-24 near-zero stable-apartment fraction; compare with 9.3 winner
+- [ ] 9.5 Tune once on the largest training window with time-series CV, freeze parameters across folds; report whether tuning helps
+- [ ] 9.6 Common-hours table: every model on intersected forecast hours (including SARIMA), per fold, beside existing per-model tables
+- [ ] 9.7 Replace hourly Wilcoxon with day-level test: daily MAE, paired day Wilcoxon + block-bootstrap CI vs best baseline; update RESULTS.md and Metrics page
+- [ ] 9.8 Conformal P10–P90 calibration from past residuals (rolling prior-day window); coverage before/after per fold
+- [ ] 9.9 Update RESULTS.md, README, Limitations page, FINAL_REPORT.md and assistant with new numbers; state plainly if no learned model beats the best baseline on common hours
