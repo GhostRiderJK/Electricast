@@ -119,5 +119,12 @@ One entry per iteration: date, item id, change, evidence, numbers.
 - Added `apartment_activity()`, which computes each apartment's mean load and reading count for an IST month and flags `suspect_inactive` when the mean is <100 Wh/h with at least 24 readings.
 - Evidence: using December 2017 (38/39 apartments reporting; data ends 2017-12-28), 21 apartments are flagged, including 13 of the 24 stable apartments; apartment 13 has no December data and is not flagged, and apartment 11 at 100.50 Wh/h is just above the boundary. Synthetic check confirms 99.9 flagged, 100.0/100.1 not, and a single-reading apartment not flagged.
 
+## 2026-10-23 — 2.8 Data-quality report and page
+
+- Added `build_data_quality.py` (writes committed `backend/data_quality.json`), `GET /api/data_quality`, the **Data Quality** page, and a responsive header fix so the sixth nav item scrolls instead of overflowing the page.
+- Evidence: JSON reports 39/39 files, 196,449 rows, 12,891 panel hours, 24 stable apartments, 7,683 valid target hours, 5,208 excluded, 21 flagged inactive; page renders 6 KPI cards, 3 tables (70 rows), and a 498×280 chart with no console errors; backend stopped shows `Could not load data quality: API error 500: /api/data_quality`; body scrollWidth 600 vs viewport 604 after the nav fix. Screenshot capture was unavailable (in-app browser viewport), so verification used DOM/API checks.
+- Wrote `CHECKPOINT_DATA.md` with the Phase 2 numbers, fold-window counts, regeneration commands, and remaining data risks.
+
+
 
 

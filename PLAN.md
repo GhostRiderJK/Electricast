@@ -26,7 +26,7 @@ Rules: one task per iteration. Tick [x] only after the VERIFY step passes.
 - [x] 2.5 Gaps: interpolate only <=6h; longer gaps flagged and excluded from train and eval
 - [x] 2.6 Outlier cap fitted on train only
 - [x] 2.7 Flag suspect_inactive apartments (December mean <100 Wh/h)
-- [ ] 2.8 Write data_quality.json and a Data Quality page
+- [x] 2.8 Write data_quality.json and a Data Quality page
 
 ## Phase 3 — Evaluation (backend/evaluate.py)
 - [ ] 3.1 Baselines: persistence, seasonal naive 24h, same-hour-last-week, mean of last 4 same weekdays

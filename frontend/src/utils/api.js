@@ -11,6 +11,7 @@ async function get(path, signal) {
 
 export const api = {
   metrics:            (signal) => get("/api/metrics", signal),
+  dataQuality:        (signal) => get("/api/data_quality", signal),
   statistics:         (signal) => get("/api/eda/statistics", signal),
   edaHourly:          (signal) => get("/api/eda/hourly", signal),
   edaDaily:           (signal) => get("/api/eda/daily", signal),

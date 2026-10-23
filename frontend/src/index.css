@@ -37,6 +37,14 @@ main [style*="display:grid"] > * {
   min-width: 0;
 }
 
+/* Keep the six-item nav usable on narrow screens instead of overflowing the page. */
+.app-nav { scrollbar-width: thin; }
+
+@media (max-width: 760px) {
+  .app-header { gap: 12px !important; }
+  .app-badges { display: none !important; }
+}
+
 @media print {
   body { background: #fff !important; }
   header, footer, button { display: none !important; }

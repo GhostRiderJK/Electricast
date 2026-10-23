@@ -4,6 +4,7 @@ import EDAPage from "./pages/EDAPage";
 import PredictionsPage from "./pages/PredictionsPage";
 import WeeklyPage from "./pages/WeeklyPage";
 import MetricsPage from "./pages/MetricsPage";
+import DataQualityPage from "./pages/DataQualityPage";
 import UploadPage from "./pages/UploadPage";
 import "./index.css";
 
@@ -12,6 +13,7 @@ const NAV_ITEMS = [
   { key: "predictions", label: "Predictions",    icon: "◉" },
   { key: "weekly",      label: "Weekly Pattern", icon: "◇" },
   { key: "metrics",     label: "Model Metrics",  icon: "◆" },
+  { key: "quality",     label: "Data Quality",   icon: "▤" },
   { key: "upload",      label: "Upload & Validate", icon: "⬆" },
 ];
 
@@ -27,8 +29,8 @@ export default function App() {
         borderBottom: "1px solid #e5e7eb",
         boxShadow: "0 1px 3px rgba(0,0,0,0.05)",
       }}>
-        <div style={{ maxWidth: 1280, margin: "0 auto", padding: "0 28px",
-          display: "flex", alignItems: "center", height: 56, gap: 32 }}>
+        <div className="app-header" style={{ maxWidth: 1280, margin: "0 auto", padding: "0 28px",
+          display: "flex", alignItems: "center", height: 56, gap: 24, minWidth: 0 }}>
 
           {/* Logo */}
           <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
@@ -48,7 +50,8 @@ export default function App() {
           </div>
 
           {/* Nav */}
-          <nav style={{ display: "flex", gap: 4, flex: 1 }}>
+          <nav className="app-nav" style={{ display: "flex", gap: 4, flex: "1 1 0", minWidth: 0,
+            overflowX: "auto", overflowY: "hidden" }}>
             {NAV_ITEMS.map(({ key, label, icon }) => {
               const active = page === key;
               return (
@@ -59,7 +62,7 @@ export default function App() {
                   color: active ? "#2563eb" : "#4b5563",
                   fontFamily: "'IBM Plex Mono', monospace",
                   fontSize: 11, fontWeight: active ? 700 : 500,
-                  transition: "all 0.15s",
+                  transition: "all 0.15s", whiteSpace: "nowrap", flexShrink: 0,
                   borderBottom: active ? "2px solid #2563eb" : "2px solid transparent",
                 }}>
                   <span style={{ fontSize: 12 }}>{icon}</span>
@@ -70,7 +73,7 @@ export default function App() {
           </nav>
 
           {/* Badge */}
-          <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+          <div className="app-badges" style={{ display: "flex", gap: 6, flexShrink: 0 }}>
             {[
               { label: "SARIMA", color: "#b91c1c" },
               { label: "XGBoost", color: "#15803d" },
@@ -100,6 +103,7 @@ export default function App() {
         {page === "predictions" && <PredictionsPage />}
         {page === "weekly"      && <WeeklyPage />}
         {page === "metrics"     && <MetricsPage />}
+        {page === "quality"     && <DataQualityPage />}
         {page === "upload"      && <UploadPage />}
       </main>
 

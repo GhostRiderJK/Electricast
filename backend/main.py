@@ -33,8 +33,10 @@ app.add_middleware(
 # ─────────────────────────────────────────────────────────────────
 
 RESULTS_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "model_results.json")
+QUALITY_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data_quality.json")
 
 DATA = None
+QUALITY = None
 
 MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
                "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
@@ -55,6 +57,19 @@ def load_results():
 
 
 load_results()
+
+
+def load_quality():
+    global QUALITY
+    if os.path.exists(QUALITY_PATH):
+        with open(QUALITY_PATH, "r") as f:
+            QUALITY = json.load(f)
+        print(f"Loaded data quality report from {QUALITY_PATH}")
+    else:
+        print(f"{QUALITY_PATH} not found. Run: python build_data_quality.py")
+
+
+load_quality()
 
 
 def _no_data():
@@ -79,6 +94,16 @@ def get_metrics():
     if not DATA:
         return _no_data()
     return DATA["metrics"]
+
+
+@app.get("/api/data_quality")
+def get_data_quality():
+    if not QUALITY:
+        return JSONResponse(
+            status_code=503,
+            content={"error": "Data quality report not available. Run build_data_quality.py."},
+        )
+    return QUALITY
 
 
 @app.get("/api/eda/hourly")
