@@ -3,7 +3,6 @@ import { api } from "../utils/api";
 import DataError from "./DataError";
 
 const MODEL_CONFIG = {
-  lstm:    { label: "LSTM",    accent: "#2563eb", bg: "#eff6ff", icon: "⬡" },
   sarima:  { label: "SARIMA",  accent: "#b91c1c", bg: "#fef2f2", icon: "⌇" },
   xgboost: { label: "XGBoost", accent: "#15803d", bg: "#f0fdf4", icon: "⬢" },
 };
@@ -78,7 +77,7 @@ export default function MetricsBar() {
 
   if (error) return <DataError error={error} label="model metrics" />;
 
-  const active = ["lstm", "sarima", "xgboost"].filter(
+  const active = ["sarima", "xgboost"].filter(
     model => data?.[model]?.status === "ok"
   );
 

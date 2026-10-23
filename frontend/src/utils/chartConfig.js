@@ -2,14 +2,12 @@
 
 export const COLORS = {
   actual:  { line: "#1a1a2e", fill: "rgba(26,26,46,0.08)",  label: "Actual" },
-  lstm:    { line: "#2563eb", fill: "rgba(37,99,235,0.10)", label: "LSTM" },
   sarima:  { line: "#dc2626", fill: "rgba(220,38,38,0.08)", label: "SARIMA" },
   xgboost: { line: "#16a34a", fill: "rgba(22,163,74,0.09)", label: "XGBoost" },
   std:     "rgba(100,116,139,0.18)",
 };
 
 export const MODEL_META = {
-  lstm:    { label: "LSTM",    color: "#2563eb", bg: "rgba(37,99,235,0.80)"  },
   sarima:  { label: "SARIMA",  color: "#dc2626", bg: "rgba(220,38,38,0.80)"  },
   xgboost: { label: "XGBoost", color: "#16a34a", bg: "rgba(22,163,74,0.80)"  },
   actual:  { label: "Actual",  color: "#1a1a2e", bg: "rgba(26,26,46,0.80)"   },

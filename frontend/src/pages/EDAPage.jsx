@@ -315,7 +315,7 @@ export default function EDAPage() {
       {/* Heatmap */}
       <div>
         <SectionHeader title="Hour × Month Heatmap"
-          sub="Average load (Wh) for each hour of day × month combination — key for LSTM window design" />
+          sub="Average load (Wh) for each hour of day × month combination" />
         <ChartCard height={280}>
           <Heatmap data={heatmap} />
         </ChartCard>

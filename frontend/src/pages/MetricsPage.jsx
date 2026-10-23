@@ -12,7 +12,6 @@ Chart.register(CategoryScale, LinearScale, PointElement, LineElement,
   BarElement, Title, Tooltip, Legend);
 
 const MODELS = [
-  { key: "lstm",    label: "LSTM",    color: "#2563eb", bg: "rgba(37,99,235,0.15)" },
   { key: "sarima",  label: "SARIMA",  color: "#dc2626", bg: "rgba(220,38,38,0.15)" },
   { key: "xgboost", label: "XGBoost", color: "#16a34a", bg: "rgba(22,163,74,0.15)" },
 ];

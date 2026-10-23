@@ -16,14 +16,12 @@ const ALL_MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct",
 
 const MODEL_COLORS = {
   actual:  { border: "#111827", bg: "rgba(17,24,39,0.07)",   text: "#111827", label: "Actual" },
-  lstm:    { border: "#2563eb", bg: "rgba(37,99,235,0.08)",  text: "#2563eb", label: "LSTM" },
   sarima:  { border: "#dc2626", bg: "rgba(220,38,38,0.07)",  text: "#b91c1c", label: "SARIMA" },
   xgboost: { border: "#16a34a", bg: "rgba(22,163,74,0.07)",  text: "#15803d", label: "XGBoost" },
 };
 
 const BAR_BG = {
   actual:  "rgba(17,24,39,0.80)",
-  lstm:    "rgba(37,99,235,0.82)",
   sarima:  "rgba(220,38,38,0.82)",
   xgboost: "rgba(22,163,74,0.82)",
 };
@@ -63,7 +61,7 @@ function ToggleBtn({ label, active, color, textColor, onClick }) {
 
 export default function PredictionsPage() {
   const [visibleModels, setVisibleModels] = useState({
-    actual: true, lstm: true, sarima: true, xgboost: true,
+    actual: true, sarima: true, xgboost: true,
   });
   const [selectedMonth, setSelectedMonth] = useState(null);
   const [selectedDay, setSelectedDay] = useState(15);
@@ -111,7 +109,7 @@ export default function PredictionsPage() {
         borderColor: MODEL_COLORS[k].border,
         backgroundColor: MODEL_COLORS[k].bg,
         borderWidth: k === "actual" ? 2.2 : 1.6,
-        borderDash: k === "lstm" ? [6,3] : k === "sarima" ? [3,2] : k === "xgboost" ? [8,3] : [],
+        borderDash: k === "sarima" ? [3,2] : k === "xgboost" ? [8,3] : [],
         tension: 0.35, pointRadius: 0, pointHoverRadius: 4, fill: false,
       }));
   }
@@ -173,7 +171,7 @@ export default function PredictionsPage() {
           <Line
             data={{
               labels: predDaily.labels,
-              datasets: mkLineDatasets(predDaily, ["actual","lstm","sarima","xgboost"])
+              datasets: mkLineDatasets(predDaily, ["actual","sarima","xgboost"])
             }}
             options={{
               ...opts,
@@ -223,7 +221,7 @@ export default function PredictionsPage() {
             <Line
               data={{
                 labels: predHourly.labels,
-                datasets: mkLineDatasets(predHourly, ["actual","lstm","sarima","xgboost"])
+                datasets: mkLineDatasets(predHourly, ["actual","sarima","xgboost"])
               }}
               options={{
                 ...opts,
@@ -252,10 +250,9 @@ export default function PredictionsPage() {
               data={{
                 labels: errData.months,
                 datasets: [
-                  { label: "LSTM MAE",    data: errData.months.map(m => errData.lstm[m].mae),    backgroundColor: "rgba(37,99,235,0.78)",  borderRadius: 4 },
                   { label: "SARIMA MAE",  data: errData.months.map(m => errData.sarima[m].mae),  backgroundColor: "rgba(220,38,38,0.78)",  borderRadius: 4 },
                   { label: "XGBoost MAE", data: errData.months.map(m => errData.xgboost[m].mae), backgroundColor: "rgba(22,163,74,0.78)",  borderRadius: 4 },
-                ].filter((_, i) => [visibleModels.lstm, visibleModels.sarima, visibleModels.xgboost][i])
+                ].filter((_, i) => [visibleModels.sarima, visibleModels.xgboost][i])
               }}
               options={opts}
             />
@@ -269,10 +266,9 @@ export default function PredictionsPage() {
               data={{
                 labels: errData.months,
                 datasets: [
-                  { label: "LSTM RMSE",    data: errData.months.map(m => errData.lstm[m].rmse),    backgroundColor: "rgba(37,99,235,0.42)",  borderRadius: 4 },
                   { label: "SARIMA RMSE",  data: errData.months.map(m => errData.sarima[m].rmse),  backgroundColor: "rgba(220,38,38,0.42)",  borderRadius: 4 },
                   { label: "XGBoost RMSE", data: errData.months.map(m => errData.xgboost[m].rmse), backgroundColor: "rgba(22,163,74,0.42)",  borderRadius: 4 },
-                ].filter((_, i) => [visibleModels.lstm, visibleModels.sarima, visibleModels.xgboost][i])
+                ].filter((_, i) => [visibleModels.sarima, visibleModels.xgboost][i])
               }}
               options={opts}
             />

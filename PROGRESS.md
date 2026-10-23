@@ -200,3 +200,10 @@ One entry per iteration: date, item id, change, evidence, numbers.
 - Interval quality: 80% nominal coverage came out at 71.6% (Jul), 78.5% (Aug), 44.8% (Sep–Dec), and 69.2% (May–Jun), with mean widths 177 / 177 / 211 / 229 Wh and mean pinball losses 21.73 / 19.87 / 61.88 / 35.25 Wh. The autumn fold is badly undercovered because the training window contains no autumn regime; this is reported as a limitation rather than fixed with test data.
 - Tests grew to 17: a hand-checked coverage/pinball example (including a missed interval) and a quantile leakage test (predictions unchanged under forecast-day mutation, P10 ≤ P50 ≤ P90, no NaNs). `python -m pytest backend/tests -q` → 17 passed (18 s).
 - Regenerated `backend/results.json` and updated `CHECKPOINT_MODELS.md` through item 4.6.
+
+## 2026-10-23 — 4.7 Omit LSTM/GRU from the UI
+
+- Took the "omitted entirely" branch: there is no trained LSTM or GRU artifact, only zero-filled placeholder data, so presenting it as a model would violate the no-placeholder rule. Training a proper deep model would need its own leakage-safe protocol and was out of scope for this item.
+- Removed the remaining LSTM surfaces: MetricsBar model config/active list, MetricsPage model list, PredictionsPage model colors, visibility toggles, line datasets, monthly MAE/RMSE series, chartConfig color/meta entries, and the EDA heatmap copy that referenced LSTM window design. `grep -ri "lstm\|gru" frontend/src` → no matches.
+- Evidence: `npm run build` passed (46 modules, 1.99 s). A fresh Vite server on :3005 pointed at the current backend on 127.0.0.1:8000 (the pre-existing :3000 preview and 0.0.0.0:8000 server were stale and left untouched) showed: Metrics page with only SARIMA and XGBoost and all four BEST badges on XGBoost; Predictions with Actual/SARIMA/XGBoost toggles and five canvases; Weekly with XGBoost-only overlay captions; no LSTM/GRU text on EDA, Predictions, Weekly, or Metrics.
+- Backend response keys are unchanged for schema compatibility (LSTM remains `status: disabled`), but no UI path reads them. README and copilot instructions still describe LSTM and will be corrected in 7.3.
