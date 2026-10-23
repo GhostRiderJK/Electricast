@@ -15,6 +15,8 @@ export const api = {
   backtestDays:       (signal) => get("/api/backtest/days", signal),
   backtestDay:        (date, signal) => get(`/api/backtest/day?date=${encodeURIComponent(date)}`, signal),
   backtestErrors:     (signal) => get("/api/backtest/errors", signal),
+  explainImportance:  (signal) => get("/api/explain/importance", signal),
+  explainResiduals:   (fold, model, signal) => get(`/api/explain/residuals?fold=${encodeURIComponent(fold)}&model=${encodeURIComponent(model)}`, signal),
   dataQuality:        (signal) => get("/api/data_quality", signal),
   statistics:         (signal) => get("/api/eda/statistics", signal),
   edaHourly:          (signal) => get("/api/eda/hourly", signal),

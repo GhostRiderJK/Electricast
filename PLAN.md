@@ -46,7 +46,7 @@ Rules: one task per iteration. Tick [x] only after the VERIFY step passes.
 ## Phase 5 — Dashboard
 - [x] 5.1 Model Metrics page: fold mean ± std table, "beats seasonal naive?" column
 - [x] 5.2 Predictions page: P10–P90 band, fold day picker, error by hour and month, worst-days table
-- [ ] 5.3 Explain page: SHAP or gain importance, residual plots
+- [x] 5.3 Explain page: SHAP or gain importance, residual plots
 - [ ] 5.4 Limitations panel
 
 ## Phase 6 — Upload & Validate redesign

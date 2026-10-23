@@ -120,6 +120,23 @@ def make_features(series, hours, reporting=None, weather=None):
     return pd.DataFrame(block, index=hours)
 
 
+def _gain_importance(model, features):
+    """XGBoost gain importance, normalized to shares, for trained features."""
+    gains = model.get_booster().get_score(importance_type="gain")
+    total = sum(float(gains.get(feature, 0.0)) for feature in features)
+    rows = [
+        {
+            "feature": feature,
+            "gain": round(float(gains.get(feature, 0.0)), 4),
+            "share": round(float(gains.get(feature, 0.0)) / total, 4)
+            if total > 0 else 0.0,
+        }
+        for feature in features
+    ]
+    rows.sort(key=lambda row: row["gain"], reverse=True)
+    return {"method": "gain", "features": rows}
+
+
 def _hour_range(start, end):
     start_ts = pd.Timestamp(start)
     end_ts = pd.Timestamp(end)
@@ -295,6 +312,7 @@ def _fit_tuned(series, train_start, train_end, reporting=None, weather=None,
             key: value for key, value in final_params.items() if key != "n_jobs"
         },
         "features": list(x_all.columns),
+        "importance": _gain_importance(model, x_all.columns),
         "tuning": {
             "n_trials": int(n_trials),
             "best_cv_mae": round(cv_mae, 4),
@@ -343,6 +361,7 @@ def fit(series, train_start, train_end, params=None, reporting=None,
         "n_capped": int(n_capped),
         "params": {k: v for k, v in effective.items() if k != "n_jobs"},
         "features": list(features.columns),
+        "importance": _gain_importance(model, features.columns),
     }
     return model, metadata
 

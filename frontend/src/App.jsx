@@ -4,6 +4,7 @@ import EDAPage from "./pages/EDAPage";
 import PredictionsPage from "./pages/PredictionsPage";
 import WeeklyPage from "./pages/WeeklyPage";
 import MetricsPage from "./pages/MetricsPage";
+import ExplainPage from "./pages/ExplainPage";
 import DataQualityPage from "./pages/DataQualityPage";
 import UploadPage from "./pages/UploadPage";
 import "./index.css";
@@ -13,6 +14,7 @@ const NAV_ITEMS = [
   { key: "predictions", label: "Predictions",    icon: "◉" },
   { key: "weekly",      label: "Weekly Pattern", icon: "◇" },
   { key: "metrics",     label: "Model Metrics",  icon: "◆" },
+  { key: "explain",     label: "Explain",        icon: "◎" },
   { key: "quality",     label: "Data Quality",   icon: "▤" },
   { key: "upload",      label: "Upload & Validate", icon: "⬆" },
 ];
@@ -103,6 +105,7 @@ export default function App() {
         {page === "predictions" && <PredictionsPage />}
         {page === "weekly"      && <WeeklyPage />}
         {page === "metrics"     && <MetricsPage />}
+        {page === "explain"     && <ExplainPage />}
         {page === "quality"     && <DataQualityPage />}
         {page === "upload"      && <UploadPage />}
       </main>

@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-23T19:21:07+05:30",
+  "generated_at": "2026-10-23T19:30:48+05:30",
   "protocol": {
     "timezone": "Asia/Kolkata",
     "target": "mean hourly load per reporting stable apartment (Wh)",
@@ -7697,6 +7697,251 @@
             "weather_temp_lag24_47_mean",
             "weather_precip_lag24_47_sum"
           ],
+          "importance": {
+            "method": "gain",
+            "features": [
+              {
+                "feature": "lag_24",
+                "gain": 2773382.0,
+                "share": 0.314
+              },
+              {
+                "feature": "lag_25",
+                "gain": 1056950.125,
+                "share": 0.1197
+              },
+              {
+                "feature": "lag_336",
+                "gain": 644917.0625,
+                "share": 0.073
+              },
+              {
+                "feature": "lag_47",
+                "gain": 469063.5938,
+                "share": 0.0531
+              },
+              {
+                "feature": "lag_46",
+                "gain": 468670.0,
+                "share": 0.0531
+              },
+              {
+                "feature": "lag24_47_mean",
+                "gain": 458942.7812,
+                "share": 0.052
+              },
+              {
+                "feature": "lag_168",
+                "gain": 371790.5625,
+                "share": 0.0421
+              },
+              {
+                "feature": "weather_temperature_2m_lag_24",
+                "gain": 293190.4062,
+                "share": 0.0332
+              },
+              {
+                "feature": "hour",
+                "gain": 278704.75,
+                "share": 0.0316
+              },
+              {
+                "feature": "weather_temp_lag24_47_mean",
+                "gain": 270848.9688,
+                "share": 0.0307
+              },
+              {
+                "feature": "weather_precip_lag24_47_sum",
+                "gain": 233155.4375,
+                "share": 0.0264
+              },
+              {
+                "feature": "weather_relative_humidity_2m_lag_24",
+                "gain": 217574.8125,
+                "share": 0.0246
+              },
+              {
+                "feature": "lag24_47_min",
+                "gain": 211279.7344,
+                "share": 0.0239
+              },
+              {
+                "feature": "weather_apparent_temperature_lag_24",
+                "gain": 209993.4062,
+                "share": 0.0238
+              },
+              {
+                "feature": "dow",
+                "gain": 191419.9062,
+                "share": 0.0217
+              },
+              {
+                "feature": "lag24_47_max",
+                "gain": 181441.1562,
+                "share": 0.0205
+              },
+              {
+                "feature": "lag_26",
+                "gain": 158074.625,
+                "share": 0.0179
+              },
+              {
+                "feature": "lag_41",
+                "gain": 129706.8438,
+                "share": 0.0147
+              },
+              {
+                "feature": "lag_40",
+                "gain": 118160.5312,
+                "share": 0.0134
+              },
+              {
+                "feature": "lag_36",
+                "gain": 96129.4219,
+                "share": 0.0109
+              },
+              {
+                "feature": "lag_27",
+                "gain": 0.0,
+                "share": 0.0
+              },
+              {
+                "feature": "lag_28",
+                "gain": 0.0,
+                "share": 0.0
+              },
+              {
+                "feature": "lag_29",
+                "gain": 0.0,
+                "share": 0.0
+              },
+              {
+                "feature": "lag_30",
+                "gain": 0.0,
+                "share": 0.0
+              },
+              {
+                "feature": "lag_31",
+                "gain": 0.0,
+                "share": 0.0
+              },
+              {
+                "feature": "lag_32",
+                "gain": 0.0,
+                "share": 0.0
+              },
+              {
+                "feature": "lag_33",
+                "gain": 0.0,
+                "share": 0.0
+              },
+              {
+                "feature": "lag_34",
+                "gain": 0.0,
+                "share": 0.0
+              },
+              {
+                "feature": "lag_35",
+                "gain": 0.0,
+                "share": 0.0
+              },
+              {
+                "feature": "lag_37",
+                "gain": 0.0,
+                "share": 0.0
+              },
+              {
+                "feature": "lag_38",
+                "gain": 0.0,
+                "share": 0.0
+              },
+              {
+                "feature": "lag_39",
+                "gain": 0.0,
+                "share": 0.0
+              },
+              {
+                "feature": "lag_42",
+                "gain": 0.0,
+                "share": 0.0
+              },
+              {
+                "feature": "lag_43",
+                "gain": 0.0,
+                "share": 0.0
+              },
+              {
+                "feature": "lag_44",
+                "gain": 0.0,
+                "share": 0.0
+              },
+              {
+                "feature": "lag_45",
+                "gain": 0.0,
+                "share": 0.0
+              },
+              {
+                "feature": "lag24_47_std",
+                "gain": 0.0,
+                "share": 0.0
+              },
+              {
+                "feature": "is_weekend",
+                "gain": 0.0,
+                "share": 0.0
+              },
+              {
+                "feature": "month",
+                "gain": 0.0,
+                "share": 0.0
+              },
+              {
+                "feature": "doy_sin",
+                "gain": 0.0,
+                "share": 0.0
+              },
+              {
+                "feature": "doy_cos",
+                "gain": 0.0,
+                "share": 0.0
+              },
+              {
+                "feature": "is_holiday",
+                "gain": 0.0,
+                "share": 0.0
+              },
+              {
+                "feature": "semester_in_session",
+                "gain": 0.0,
+                "share": 0.0
+              },
+              {
+                "feature": "n_reporting_lag_24",
+                "gain": 0.0,
+                "share": 0.0
+              },
+              {
+                "feature": "n_reporting_lag24_47_mean",
+                "gain": 0.0,
+                "share": 0.0
+              },
+              {
+                "feature": "weather_precipitation_lag_24",
+                "gain": 0.0,
+                "share": 0.0
+              },
+              {
+                "feature": "weather_cloud_cover_lag_24",
+                "gain": 0.0,
+                "share": 0.0
+              },
+              {
+                "feature": "weather_wind_speed_10m_lag_24",
+                "gain": 0.0,
+                "share": 0.0
+              }
+            ]
+          },
           "tuning": {
             "n_trials": 30,
             "best_cv_mae": 82.3263,
@@ -15590,6 +15835,251 @@
             "weather_temp_lag24_47_mean",
             "weather_precip_lag24_47_sum"
           ],
+          "importance": {
+            "method": "gain",
+            "features": [
+              {
+                "feature": "lag_24",
+                "gain": 2200642.0,
+                "share": 0.2743
+              },
+              {
+                "feature": "lag_25",
+                "gain": 889171.5625,
+                "share": 0.1108
+              },
+              {
+                "feature": "lag_47",
+                "gain": 330061.6875,
+                "share": 0.0411
+              },
+              {
+                "feature": "lag_336",
+                "gain": 263456.4062,
+                "share": 0.0328
+              },
+              {
+                "feature": "lag_168",
+                "gain": 231423.6875,
+                "share": 0.0288
+              },
+              {
+                "feature": "lag_46",
+                "gain": 201709.1406,
+                "share": 0.0251
+              },
+              {
+                "feature": "weather_wind_speed_10m_lag_24",
+                "gain": 193695.1406,
+                "share": 0.0241
+              },
+              {
+                "feature": "hour",
+                "gain": 169083.875,
+                "share": 0.0211
+              },
+              {
+                "feature": "weather_precip_lag24_47_sum",
+                "gain": 166722.0938,
+                "share": 0.0208
+              },
+              {
+                "feature": "lag24_47_mean",
+                "gain": 157585.2969,
+                "share": 0.0196
+              },
+              {
+                "feature": "lag_26",
+                "gain": 149260.1562,
+                "share": 0.0186
+              },
+              {
+                "feature": "weather_relative_humidity_2m_lag_24",
+                "gain": 149044.5781,
+                "share": 0.0186
+              },
+              {
+                "feature": "weather_precipitation_lag_24",
+                "gain": 137278.8594,
+                "share": 0.0171
+              },
+              {
+                "feature": "weather_temperature_2m_lag_24",
+                "gain": 135961.2812,
+                "share": 0.0169
+              },
+              {
+                "feature": "is_weekend",
+                "gain": 134602.5469,
+                "share": 0.0168
+              },
+              {
+                "feature": "dow",
+                "gain": 127110.6484,
+                "share": 0.0158
+              },
+              {
+                "feature": "lag24_47_max",
+                "gain": 125390.1719,
+                "share": 0.0156
+              },
+              {
+                "feature": "weather_temp_lag24_47_mean",
+                "gain": 123774.2656,
+                "share": 0.0154
+              },
+              {
+                "feature": "lag_45",
+                "gain": 118501.7578,
+                "share": 0.0148
+              },
+              {
+                "feature": "doy_cos",
+                "gain": 109800.2734,
+                "share": 0.0137
+              },
+              {
+                "feature": "lag24_47_min",
+                "gain": 105161.1094,
+                "share": 0.0131
+              },
+              {
+                "feature": "doy_sin",
+                "gain": 104866.4922,
+                "share": 0.0131
+              },
+              {
+                "feature": "weather_apparent_temperature_lag_24",
+                "gain": 100542.7656,
+                "share": 0.0125
+              },
+              {
+                "feature": "lag_28",
+                "gain": 95257.6406,
+                "share": 0.0119
+              },
+              {
+                "feature": "lag_27",
+                "gain": 94357.8047,
+                "share": 0.0118
+              },
+              {
+                "feature": "lag24_47_std",
+                "gain": 92048.3125,
+                "share": 0.0115
+              },
+              {
+                "feature": "lag_36",
+                "gain": 87323.4297,
+                "share": 0.0109
+              },
+              {
+                "feature": "lag_31",
+                "gain": 82931.0547,
+                "share": 0.0103
+              },
+              {
+                "feature": "lag_39",
+                "gain": 79546.7188,
+                "share": 0.0099
+              },
+              {
+                "feature": "lag_44",
+                "gain": 79504.9297,
+                "share": 0.0099
+              },
+              {
+                "feature": "lag_42",
+                "gain": 79173.0156,
+                "share": 0.0099
+              },
+              {
+                "feature": "weather_cloud_cover_lag_24",
+                "gain": 77079.7266,
+                "share": 0.0096
+              },
+              {
+                "feature": "lag_40",
+                "gain": 76549.9688,
+                "share": 0.0095
+              },
+              {
+                "feature": "lag_30",
+                "gain": 76357.6953,
+                "share": 0.0095
+              },
+              {
+                "feature": "lag_29",
+                "gain": 74819.8203,
+                "share": 0.0093
+              },
+              {
+                "feature": "lag_35",
+                "gain": 74171.2344,
+                "share": 0.0092
+              },
+              {
+                "feature": "lag_38",
+                "gain": 72771.1328,
+                "share": 0.0091
+              },
+              {
+                "feature": "lag_43",
+                "gain": 71981.0234,
+                "share": 0.009
+              },
+              {
+                "feature": "n_reporting_lag24_47_mean",
+                "gain": 70091.8125,
+                "share": 0.0087
+              },
+              {
+                "feature": "lag_41",
+                "gain": 69864.2656,
+                "share": 0.0087
+              },
+              {
+                "feature": "lag_34",
+                "gain": 68826.0078,
+                "share": 0.0086
+              },
+              {
+                "feature": "lag_33",
+                "gain": 65701.6797,
+                "share": 0.0082
+              },
+              {
+                "feature": "lag_37",
+                "gain": 55892.2812,
+                "share": 0.007
+              },
+              {
+                "feature": "lag_32",
+                "gain": 53919.2266,
+                "share": 0.0067
+              },
+              {
+                "feature": "month",
+                "gain": 0.0,
+                "share": 0.0
+              },
+              {
+                "feature": "is_holiday",
+                "gain": 0.0,
+                "share": 0.0
+              },
+              {
+                "feature": "semester_in_session",
+                "gain": 0.0,
+                "share": 0.0
+              },
+              {
+                "feature": "n_reporting_lag_24",
+                "gain": 0.0,
+                "share": 0.0
+              }
+            ]
+          },
           "tuning": {
             "n_trials": 30,
             "best_cv_mae": 63.058,
@@ -38472,6 +38962,251 @@
             "weather_temp_lag24_47_mean",
             "weather_precip_lag24_47_sum"
           ],
+          "importance": {
+            "method": "gain",
+            "features": [
+              {
+                "feature": "lag_24",
+                "gain": 1104722.375,
+                "share": 0.177
+              },
+              {
+                "feature": "lag_25",
+                "gain": 792792.375,
+                "share": 0.127
+              },
+              {
+                "feature": "lag_47",
+                "gain": 338392.9062,
+                "share": 0.0542
+              },
+              {
+                "feature": "lag_168",
+                "gain": 327265.0625,
+                "share": 0.0524
+              },
+              {
+                "feature": "lag_336",
+                "gain": 251095.1094,
+                "share": 0.0402
+              },
+              {
+                "feature": "lag_26",
+                "gain": 207896.4375,
+                "share": 0.0333
+              },
+              {
+                "feature": "lag_46",
+                "gain": 160789.9844,
+                "share": 0.0258
+              },
+              {
+                "feature": "hour",
+                "gain": 160650.2812,
+                "share": 0.0257
+              },
+              {
+                "feature": "semester_in_session",
+                "gain": 134455.2812,
+                "share": 0.0215
+              },
+              {
+                "feature": "lag_45",
+                "gain": 132870.0156,
+                "share": 0.0213
+              },
+              {
+                "feature": "lag24_47_mean",
+                "gain": 125986.5547,
+                "share": 0.0202
+              },
+              {
+                "feature": "is_weekend",
+                "gain": 107721.1328,
+                "share": 0.0173
+              },
+              {
+                "feature": "month",
+                "gain": 104930.0078,
+                "share": 0.0168
+              },
+              {
+                "feature": "weather_temperature_2m_lag_24",
+                "gain": 98784.4453,
+                "share": 0.0158
+              },
+              {
+                "feature": "weather_temp_lag24_47_mean",
+                "gain": 98114.1172,
+                "share": 0.0157
+              },
+              {
+                "feature": "dow",
+                "gain": 95466.3672,
+                "share": 0.0153
+              },
+              {
+                "feature": "lag_27",
+                "gain": 95427.9688,
+                "share": 0.0153
+              },
+              {
+                "feature": "lag24_47_max",
+                "gain": 92497.6875,
+                "share": 0.0148
+              },
+              {
+                "feature": "weather_precipitation_lag_24",
+                "gain": 90882.9375,
+                "share": 0.0146
+              },
+              {
+                "feature": "weather_precip_lag24_47_sum",
+                "gain": 88704.3828,
+                "share": 0.0142
+              },
+              {
+                "feature": "doy_sin",
+                "gain": 82098.9844,
+                "share": 0.0132
+              },
+              {
+                "feature": "weather_wind_speed_10m_lag_24",
+                "gain": 79634.0391,
+                "share": 0.0128
+              },
+              {
+                "feature": "lag_40",
+                "gain": 78169.4297,
+                "share": 0.0125
+              },
+              {
+                "feature": "lag_29",
+                "gain": 74580.0781,
+                "share": 0.0119
+              },
+              {
+                "feature": "lag_42",
+                "gain": 71830.25,
+                "share": 0.0115
+              },
+              {
+                "feature": "lag_28",
+                "gain": 70449.5078,
+                "share": 0.0113
+              },
+              {
+                "feature": "doy_cos",
+                "gain": 69966.6172,
+                "share": 0.0112
+              },
+              {
+                "feature": "weather_relative_humidity_2m_lag_24",
+                "gain": 66369.3125,
+                "share": 0.0106
+              },
+              {
+                "feature": "lag_44",
+                "gain": 66009.4219,
+                "share": 0.0106
+              },
+              {
+                "feature": "lag24_47_min",
+                "gain": 64605.8242,
+                "share": 0.0104
+              },
+              {
+                "feature": "weather_apparent_temperature_lag_24",
+                "gain": 63951.9805,
+                "share": 0.0102
+              },
+              {
+                "feature": "lag_38",
+                "gain": 63667.4258,
+                "share": 0.0102
+              },
+              {
+                "feature": "lag24_47_std",
+                "gain": 63624.3984,
+                "share": 0.0102
+              },
+              {
+                "feature": "lag_35",
+                "gain": 63091.3398,
+                "share": 0.0101
+              },
+              {
+                "feature": "lag_36",
+                "gain": 59864.6367,
+                "share": 0.0096
+              },
+              {
+                "feature": "weather_cloud_cover_lag_24",
+                "gain": 59540.2773,
+                "share": 0.0095
+              },
+              {
+                "feature": "n_reporting_lag24_47_mean",
+                "gain": 59130.25,
+                "share": 0.0095
+              },
+              {
+                "feature": "lag_41",
+                "gain": 59088.5039,
+                "share": 0.0095
+              },
+              {
+                "feature": "lag_37",
+                "gain": 59041.0195,
+                "share": 0.0095
+              },
+              {
+                "feature": "lag_39",
+                "gain": 55976.0859,
+                "share": 0.009
+              },
+              {
+                "feature": "lag_43",
+                "gain": 54921.9023,
+                "share": 0.0088
+              },
+              {
+                "feature": "lag_30",
+                "gain": 51810.0625,
+                "share": 0.0083
+              },
+              {
+                "feature": "lag_34",
+                "gain": 50979.1797,
+                "share": 0.0082
+              },
+              {
+                "feature": "lag_33",
+                "gain": 49108.4648,
+                "share": 0.0079
+              },
+              {
+                "feature": "lag_32",
+                "gain": 47766.1445,
+                "share": 0.0077
+              },
+              {
+                "feature": "lag_31",
+                "gain": 46695.3984,
+                "share": 0.0075
+              },
+              {
+                "feature": "is_holiday",
+                "gain": 0.0,
+                "share": 0.0
+              },
+              {
+                "feature": "n_reporting_lag_24",
+                "gain": 0.0,
+                "share": 0.0
+              }
+            ]
+          },
           "tuning": {
             "n_trials": 30,
             "best_cv_mae": 58.4079,
@@ -40757,6 +41492,251 @@
             "weather_temp_lag24_47_mean",
             "weather_precip_lag24_47_sum"
           ],
+          "importance": {
+            "method": "gain",
+            "features": [
+              {
+                "feature": "lag_24",
+                "gain": 6326350.5,
+                "share": 0.1588
+              },
+              {
+                "feature": "month",
+                "gain": 5735511.0,
+                "share": 0.1439
+              },
+              {
+                "feature": "doy_cos",
+                "gain": 4932247.0,
+                "share": 0.1238
+              },
+              {
+                "feature": "lag_25",
+                "gain": 2628572.0,
+                "share": 0.066
+              },
+              {
+                "feature": "lag_336",
+                "gain": 1516736.0,
+                "share": 0.0381
+              },
+              {
+                "feature": "lag_168",
+                "gain": 1305183.875,
+                "share": 0.0328
+              },
+              {
+                "feature": "doy_sin",
+                "gain": 1267151.0,
+                "share": 0.0318
+              },
+              {
+                "feature": "weather_precip_lag24_47_sum",
+                "gain": 1147384.0,
+                "share": 0.0288
+              },
+              {
+                "feature": "lag_47",
+                "gain": 1125429.0,
+                "share": 0.0282
+              },
+              {
+                "feature": "weather_cloud_cover_lag_24",
+                "gain": 1104298.75,
+                "share": 0.0277
+              },
+              {
+                "feature": "lag24_47_min",
+                "gain": 1018476.5,
+                "share": 0.0256
+              },
+              {
+                "feature": "weather_temperature_2m_lag_24",
+                "gain": 862101.8125,
+                "share": 0.0216
+              },
+              {
+                "feature": "lag24_47_max",
+                "gain": 844077.0,
+                "share": 0.0212
+              },
+              {
+                "feature": "lag_42",
+                "gain": 841310.5,
+                "share": 0.0211
+              },
+              {
+                "feature": "weather_temp_lag24_47_mean",
+                "gain": 806388.9375,
+                "share": 0.0202
+              },
+              {
+                "feature": "lag24_47_std",
+                "gain": 732529.0625,
+                "share": 0.0184
+              },
+              {
+                "feature": "weather_apparent_temperature_lag_24",
+                "gain": 646498.3125,
+                "share": 0.0162
+              },
+              {
+                "feature": "lag24_47_mean",
+                "gain": 616080.75,
+                "share": 0.0155
+              },
+              {
+                "feature": "lag_45",
+                "gain": 611410.5,
+                "share": 0.0153
+              },
+              {
+                "feature": "weather_wind_speed_10m_lag_24",
+                "gain": 596215.625,
+                "share": 0.015
+              },
+              {
+                "feature": "lag_44",
+                "gain": 560190.5,
+                "share": 0.0141
+              },
+              {
+                "feature": "lag_46",
+                "gain": 559303.3125,
+                "share": 0.014
+              },
+              {
+                "feature": "lag_31",
+                "gain": 546011.0,
+                "share": 0.0137
+              },
+              {
+                "feature": "lag_40",
+                "gain": 541442.3125,
+                "share": 0.0136
+              },
+              {
+                "feature": "dow",
+                "gain": 529711.625,
+                "share": 0.0133
+              },
+              {
+                "feature": "weather_relative_humidity_2m_lag_24",
+                "gain": 502040.5938,
+                "share": 0.0126
+              },
+              {
+                "feature": "lag_39",
+                "gain": 425831.125,
+                "share": 0.0107
+              },
+              {
+                "feature": "lag_29",
+                "gain": 402307.0625,
+                "share": 0.0101
+              },
+              {
+                "feature": "lag_30",
+                "gain": 359075.5938,
+                "share": 0.009
+              },
+              {
+                "feature": "lag_41",
+                "gain": 348546.625,
+                "share": 0.0087
+              },
+              {
+                "feature": "lag_43",
+                "gain": 348190.4688,
+                "share": 0.0087
+              },
+              {
+                "feature": "lag_26",
+                "gain": 64026.8438,
+                "share": 0.0016
+              },
+              {
+                "feature": "lag_27",
+                "gain": 0.0,
+                "share": 0.0
+              },
+              {
+                "feature": "lag_28",
+                "gain": 0.0,
+                "share": 0.0
+              },
+              {
+                "feature": "lag_32",
+                "gain": 0.0,
+                "share": 0.0
+              },
+              {
+                "feature": "lag_33",
+                "gain": 0.0,
+                "share": 0.0
+              },
+              {
+                "feature": "lag_34",
+                "gain": 0.0,
+                "share": 0.0
+              },
+              {
+                "feature": "lag_35",
+                "gain": 0.0,
+                "share": 0.0
+              },
+              {
+                "feature": "lag_36",
+                "gain": 0.0,
+                "share": 0.0
+              },
+              {
+                "feature": "lag_37",
+                "gain": 0.0,
+                "share": 0.0
+              },
+              {
+                "feature": "lag_38",
+                "gain": 0.0,
+                "share": 0.0
+              },
+              {
+                "feature": "hour",
+                "gain": 0.0,
+                "share": 0.0
+              },
+              {
+                "feature": "is_weekend",
+                "gain": 0.0,
+                "share": 0.0
+              },
+              {
+                "feature": "is_holiday",
+                "gain": 0.0,
+                "share": 0.0
+              },
+              {
+                "feature": "semester_in_session",
+                "gain": 0.0,
+                "share": 0.0
+              },
+              {
+                "feature": "n_reporting_lag_24",
+                "gain": 0.0,
+                "share": 0.0
+              },
+              {
+                "feature": "n_reporting_lag24_47_mean",
+                "gain": 0.0,
+                "share": 0.0
+              },
+              {
+                "feature": "weather_precipitation_lag_24",
+                "gain": 0.0,
+                "share": 0.0
+              }
+            ]
+          },
           "tuning": {
             "n_trials": 30,
             "best_cv_mae": 139.5457,

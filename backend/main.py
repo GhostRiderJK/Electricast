@@ -43,6 +43,13 @@ BACKTEST_SUMMARY = None
 BACKTEST_DAYS = None
 BACKTEST_DAY_INDEX = {}
 BACKTEST_ERRORS = None
+BACKTEST_RECORDS = {}
+
+EXPLAIN_RESIDUAL_MODELS = {
+    "xgboost": "XGBoost",
+    "sarima": "SARIMA",
+    "p50": "Quantile XGBoost (P50)",
+}
 
 MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
                "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
@@ -265,6 +272,7 @@ def _build_backtest_dashboard(results):
         hourly = fold.get("hourly") or {"columns": [], "rows": []}
         columns = hourly.get("columns", [])
         records = [dict(zip(columns, row)) for row in hourly.get("rows", [])]
+        BACKTEST_RECORDS[fold["id"]] = records
         grouped = {}
         for record in records:
             date = record["time"][:10]
@@ -347,6 +355,7 @@ def load_backtest():
             results = json.load(f)
         BACKTEST_RESULTS = results
         BACKTEST_SUMMARY = _build_backtest_summary(results)
+        BACKTEST_RECORDS.clear()
         BACKTEST_DAYS, BACKTEST_DAY_INDEX, BACKTEST_ERRORS = (
             _build_backtest_dashboard(results)
         )
@@ -421,6 +430,131 @@ def get_backtest_errors():
             content={"error": "Backtest hourly results not available. Run evaluate.py first."},
         )
     return BACKTEST_ERRORS
+
+
+@app.get("/api/explain/importance")
+def get_explain_importance():
+    if not BACKTEST_RESULTS:
+        return JSONResponse(
+            status_code=503,
+            content={"error": "Backtest results not available. Run evaluate.py first."},
+        )
+    folds = []
+    for fold in BACKTEST_RESULTS["folds"]:
+        fit = fold.get("model_fit", {}).get("xgboost", {})
+        importance = fit.get("importance") or {}
+        folds.append({
+            "id": fold["id"],
+            "label": _fold_label(fold["test"]),
+            "method": importance.get("method"),
+            "features": importance.get("features", []),
+        })
+    if not any(fold["features"] for fold in folds):
+        return JSONResponse(
+            status_code=503,
+            content={"error": "Gain importance not available. Run evaluate.py to regenerate results.json."},
+        )
+    return {
+        "model": "xgboost",
+        "label": "XGBoost",
+        "note": "Gain importance is the total split gain of each feature on the fold's training data, normalized to shares. Correlated lag features can split credit; this is not a causal effect.",
+        "folds": folds,
+    }
+
+
+@app.get("/api/explain/residuals")
+def get_explain_residuals(
+    fold: str = Query(..., description="Fold id, e.g. 2017-07"),
+    model: str = Query("xgboost", description="xgboost, sarima, or p50"),
+):
+    if model not in EXPLAIN_RESIDUAL_MODELS:
+        return JSONResponse(
+            status_code=400,
+            content={"error": f"Unknown residual model '{model}'."},
+        )
+    if not BACKTEST_RESULTS:
+        return JSONResponse(
+            status_code=503,
+            content={"error": "Backtest results not available. Run evaluate.py first."},
+        )
+    fold_meta = next(
+        (item for item in BACKTEST_SUMMARY["folds"] if item["id"] == fold), None
+    ) if BACKTEST_SUMMARY else None
+    records = BACKTEST_RECORDS.get(fold)
+    if fold_meta is None or not records:
+        return JSONResponse(
+            status_code=404,
+            content={"error": f"No hourly backtest rows for fold '{fold}'."},
+        )
+
+    points = []
+    residuals = []
+    by_hour_sum = {hour: [0.0, 0.0, 0] for hour in range(24)}
+    for record in records:
+        actual = record.get("actual")
+        predicted = record.get(model)
+        if actual is None or predicted is None:
+            continue
+        residual = actual - predicted
+        hour = int(record["time"][11:13])
+        bucket = by_hour_sum[hour]
+        bucket[0] += residual
+        bucket[1] += abs(residual)
+        bucket[2] += 1
+        residuals.append(residual)
+        points.append({
+            "x": round(predicted, 2),
+            "y": round(residual, 2),
+        })
+
+    by_hour = [{
+        "hour": hour,
+        "n": by_hour_sum[hour][2],
+        "mean_residual_wh": round(by_hour_sum[hour][0] / by_hour_sum[hour][2], 2)
+        if by_hour_sum[hour][2] else None,
+        "mae_wh": round(by_hour_sum[hour][1] / by_hour_sum[hour][2], 2)
+        if by_hour_sum[hour][2] else None,
+    } for hour in range(24)]
+
+    if residuals:
+        summary = {
+            "n": len(residuals),
+            "mean_residual_wh": round(float(np.mean(residuals)), 2),
+            "mae_wh": round(float(np.mean(np.abs(residuals))), 2),
+            "rmse_wh": round(float(np.sqrt(np.mean(np.square(residuals)))), 2),
+        }
+        low, high = float(np.min(residuals)), float(np.max(residuals))
+        if high <= low:
+            histogram = [{
+                "start": round(low, 2), "end": round(high, 2),
+                "count": len(residuals),
+            }]
+        else:
+            n_bins = 20
+            width = (high - low) / n_bins
+            counts = [0] * n_bins
+            for value in residuals:
+                index = min(int((value - low) / width), n_bins - 1)
+                counts[index] += 1
+            histogram = [{
+                "start": round(low + index * width, 2),
+                "end": round(low + (index + 1) * width, 2),
+                "count": counts[index],
+            } for index in range(n_bins)]
+    else:
+        summary = {"n": 0, "mean_residual_wh": None, "mae_wh": None, "rmse_wh": None}
+        histogram = []
+
+    return {
+        "fold_id": fold,
+        "fold_label": fold_meta["label"],
+        "model": model,
+        "model_label": EXPLAIN_RESIDUAL_MODELS[model],
+        "summary": summary,
+        "points": points,
+        "by_hour": by_hour,
+        "histogram": histogram,
+    }
 
 
 @app.get("/api/data_quality")
