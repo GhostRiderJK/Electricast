@@ -38,7 +38,11 @@ QUALITY_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data_qu
 
 DATA = None
 QUALITY = None
+BACKTEST_RESULTS = None
 BACKTEST_SUMMARY = None
+BACKTEST_DAYS = None
+BACKTEST_DAY_INDEX = {}
+BACKTEST_ERRORS = None
 
 MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
                "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
@@ -194,12 +198,158 @@ def _build_backtest_summary(results):
     }
 
 
+BACKTEST_MODEL_KEYS = ("xgboost", "sarima", "p50", "seasonal_naive")
+BACKTEST_SERIES_KEYS = ("actual", "seasonal_naive", "xgboost", "sarima",
+                        "p10", "p50", "p90")
+
+
+def _mae(pairs):
+    values = [abs(pred - actual) for actual, pred in pairs if pred is not None]
+    return round(float(np.mean(values)), 2) if values else None
+
+
+def _mean(values):
+    values = [float(value) for value in values if value is not None]
+    return round(float(np.mean(values)), 2) if values else None
+
+
+def _model_error_summary(records, key):
+    pairs = [
+        (record["actual"], record.get(key))
+        for record in records
+        if record.get("actual") is not None and record.get(key) is not None
+    ]
+    return {"mae_wh": _mae(pairs), "n": len(pairs)}
+
+
+def _day_payload(fold_id, fold_label, date, records):
+    arrays = {key: [None] * 24 for key in BACKTEST_SERIES_KEYS}
+    for record in records:
+        hour = int(record["time"][11:13])
+        for key in BACKTEST_SERIES_KEYS:
+            arrays[key][hour] = record.get(key)
+
+    actuals = [value for value in arrays["actual"] if value is not None]
+    return {
+        "date": date,
+        "weekday": pd.Timestamp(date).day_name(),
+        "fold_id": fold_id,
+        "fold_label": fold_label,
+        "labels": [f"{hour:02d}:00" for hour in range(24)],
+        **arrays,
+        "n_eval_hours": len(records),
+        "actual_peak_wh": round(max(actuals), 2) if actuals else None,
+        "actual_mean_wh": _mean(actuals),
+        "model_mae": {
+            key: _model_error_summary(records, key) for key in BACKTEST_MODEL_KEYS
+        },
+    }
+
+
+def _build_backtest_dashboard(results):
+    fold_meta = [
+        {
+            "id": fold["id"],
+            "label": _fold_label(fold["test"]),
+            "test_start": fold["test"]["start"],
+            "test_end": fold["test"]["end"],
+        }
+        for fold in results["folds"]
+    ]
+    meta_by_id = {meta["id"]: meta for meta in fold_meta}
+
+    days = []
+    by_date = {}
+    all_records = []
+    for fold in results["folds"]:
+        hourly = fold.get("hourly") or {"columns": [], "rows": []}
+        columns = hourly.get("columns", [])
+        records = [dict(zip(columns, row)) for row in hourly.get("rows", [])]
+        grouped = {}
+        for record in records:
+            date = record["time"][:10]
+            grouped.setdefault(date, []).append(record)
+        all_records.extend(records)
+
+        fold_days = []
+        for date in sorted(grouped):
+            payload = _day_payload(
+                fold["id"], meta_by_id[fold["id"]]["label"], date, grouped[date]
+            )
+            by_date[date] = payload
+            fold_days.append({
+                "date": date,
+                "weekday": payload["weekday"],
+                "eval_hours": payload["n_eval_hours"],
+                "actual_peak_wh": payload["actual_peak_wh"],
+            })
+        days.append({**meta_by_id[fold["id"]], "days": fold_days})
+
+    by_hour = []
+    for hour in range(24):
+        rows = [record for record in all_records
+                if int(record["time"][11:13]) == hour]
+        by_hour.append({
+            "hour": hour,
+            "n": sum(1 for record in rows if record.get("actual") is not None),
+            "models": {
+                key: _model_error_summary(rows, key) for key in BACKTEST_MODEL_KEYS
+            },
+        })
+
+    months = {}
+    for record in all_records:
+        month = int(record["time"][5:7])
+        months.setdefault(month, []).append(record)
+    by_month = [{
+        "month": month,
+        "label": MONTH_NAMES[month - 1],
+        "n": sum(1 for record in months[month] if record.get("actual") is not None),
+        "models": {
+            key: _model_error_summary(months[month], key)
+            for key in BACKTEST_MODEL_KEYS
+        },
+    } for month in sorted(months)]
+
+    worst_days = [
+        {
+            "date": payload["date"],
+            "weekday": payload["weekday"],
+            "fold_label": payload["fold_label"],
+            "n_eval_hours": payload["n_eval_hours"],
+            "actual_peak_wh": payload["actual_peak_wh"],
+            "models": payload["model_mae"],
+        }
+        for payload in by_date.values()
+        if payload["model_mae"]["xgboost"]["mae_wh"] is not None
+        and payload["n_eval_hours"] >= 12
+    ]
+    worst_days.sort(key=lambda day: day["models"]["xgboost"]["mae_wh"],
+                    reverse=True)
+
+    return (
+        {"folds": days},
+        by_date,
+        {
+            "by_hour": by_hour,
+            "by_month": by_month,
+            "worst_days": worst_days[:10],
+            "ranking": "XGBoost MAE, minimum 12 evaluable hours",
+        },
+    )
+
+
 def load_backtest():
-    global BACKTEST_SUMMARY
+    global BACKTEST_RESULTS, BACKTEST_SUMMARY, BACKTEST_DAYS, BACKTEST_DAY_INDEX
+    global BACKTEST_ERRORS
     if os.path.exists(BACKTEST_PATH):
         with open(BACKTEST_PATH, "r") as f:
             results = json.load(f)
+        BACKTEST_RESULTS = results
         BACKTEST_SUMMARY = _build_backtest_summary(results)
+        BACKTEST_DAYS, BACKTEST_DAY_INDEX, BACKTEST_ERRORS = (
+            _build_backtest_dashboard(results)
+        )
         print(f"Loaded backtest summary from {BACKTEST_PATH}")
     else:
         print(f"{BACKTEST_PATH} not found. Run: python evaluate.py")
@@ -240,6 +390,37 @@ def get_backtest_summary():
             content={"error": "Backtest results not available. Run evaluate.py first."},
         )
     return BACKTEST_SUMMARY
+
+
+@app.get("/api/backtest/days")
+def get_backtest_days():
+    if not BACKTEST_DAYS or not any(fold["days"] for fold in BACKTEST_DAYS["folds"]):
+        return JSONResponse(
+            status_code=503,
+            content={"error": "Backtest hourly results not available. Run evaluate.py first."},
+        )
+    return BACKTEST_DAYS
+
+
+@app.get("/api/backtest/day")
+def get_backtest_day(date: str = Query(..., description="IST date, YYYY-MM-DD")):
+    payload = BACKTEST_DAY_INDEX.get(date)
+    if payload is None:
+        return JSONResponse(
+            status_code=404,
+            content={"error": f"No evaluated backtest day for {date}."},
+        )
+    return payload
+
+
+@app.get("/api/backtest/errors")
+def get_backtest_errors():
+    if not BACKTEST_ERRORS or not BACKTEST_ERRORS["by_month"]:
+        return JSONResponse(
+            status_code=503,
+            content={"error": "Backtest hourly results not available. Run evaluate.py first."},
+        )
+    return BACKTEST_ERRORS
 
 
 @app.get("/api/data_quality")

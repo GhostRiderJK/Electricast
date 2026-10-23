@@ -294,6 +294,29 @@ def select_best_baseline(actual, preds, eval_mask, scale):
     return best, mask_name, int(mask.sum()), selection_metrics
 
 
+def _hourly_records(actual, preds, quantile_frame, mask):
+    """Per-hour evaluation rows for the dashboard (Wh, local IST timestamps)."""
+    sources = {
+        "actual": actual,
+        "seasonal_naive": preds["seasonal_naive_24"],
+        "xgboost": preds["xgboost"],
+        "sarima": preds["sarima"],
+        "p10": quantile_frame["p10"] if quantile_frame is not None else None,
+        "p50": quantile_frame["p50"] if quantile_frame is not None else None,
+        "p90": quantile_frame["p90"] if quantile_frame is not None else None,
+    }
+    columns = ["time"] + list(sources)
+    rows = []
+    for timestamp in actual.index[mask]:
+        row = [timestamp.strftime("%Y-%m-%dT%H:%M")]
+        for series in sources.values():
+            value = None if series is None else series.get(timestamp)
+            row.append(None if value is None or not np.isfinite(value)
+                       else round(float(value), 2))
+        rows.append(row)
+    return {"columns": columns, "rows": rows}
+
+
 def evaluate_fold(series, fold, reporting=None, weather_frame=None):
     """Score baselines and learned models on one day-ahead fold.
 
@@ -384,6 +407,7 @@ def evaluate_fold(series, fold, reporting=None, weather_frame=None):
         "mase_scale": _clean(scale, 4),
         "models": models,
         "intervals": intervals,
+        "hourly": _hourly_records(actual, preds, quantile_frame, mask),
         "model_fit": model_fit,
         "best_baseline": best,
         "selection": {

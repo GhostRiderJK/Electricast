@@ -12,21 +12,26 @@ import DataError from "../components/DataError";
 Chart.register(CategoryScale, LinearScale, PointElement, LineElement,
   BarElement, Title, Tooltip, Legend, Filler);
 
-const ALL_MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
-
-const MODEL_COLORS = {
-  actual:  { border: "#111827", bg: "rgba(17,24,39,0.07)",   text: "#111827", label: "Actual" },
-  sarima:  { border: "#dc2626", bg: "rgba(220,38,38,0.07)",  text: "#b91c1c", label: "SARIMA" },
-  xgboost: { border: "#16a34a", bg: "rgba(22,163,74,0.07)",  text: "#15803d", label: "XGBoost" },
+const SERIES = {
+  actual:         { label: "Actual",            color: "#111827", dash: [] },
+  seasonal_naive: { label: "Seasonal naive 24h", color: "#6b7280", dash: [2, 3] },
+  xgboost:        { label: "XGBoost",            color: "#16a34a", dash: [8, 3] },
+  sarima:         { label: "SARIMA",             color: "#dc2626", dash: [3, 2] },
+  p50:            { label: "Quantile P50",       color: "#d97706", dash: [] },
 };
 
-const BAR_BG = {
-  actual:  "rgba(17,24,39,0.80)",
-  sarima:  "rgba(220,38,38,0.82)",
-  xgboost: "rgba(22,163,74,0.82)",
+const MAE_KEYS = ["xgboost", "sarima", "p50", "seasonal_naive"];
+
+const BAR_COLORS = {
+  xgboost: "rgba(22,163,74,0.78)",
+  sarima: "rgba(220,38,38,0.78)",
+  p50: "rgba(217,119,6,0.78)",
+  seasonal_naive: "rgba(107,114,128,0.55)",
 };
 
-function ChartCard({ title, sub, height = 270, children }) {
+const fmtWh = (value) => Number.isFinite(value) ? `${value.toFixed(1)} Wh` : "N/A";
+
+function Card({ title, sub, height, children }) {
   return (
     <div style={{ background: "#fff", border: "1px solid #e5e7eb",
       borderRadius: 12, padding: "18px 22px" }}>
@@ -38,12 +43,12 @@ function ChartCard({ title, sub, height = 270, children }) {
           {sub && <div style={{ fontSize: 11, color: "#4b5563", marginTop: 3 }}>{sub}</div>}
         </div>
       )}
-      <div style={{ height }}>{children}</div>
+      {height ? <div style={{ height }}>{children}</div> : children}
     </div>
   );
 }
 
-function ToggleBtn({ label, active, color, textColor, onClick }) {
+function ToggleBtn({ label, active, color, onClick }) {
   return (
     <button onClick={onClick} style={{
       display: "flex", alignItems: "center", gap: 6,
@@ -51,7 +56,7 @@ function ToggleBtn({ label, active, color, textColor, onClick }) {
       borderColor: active ? color : "#e5e7eb",
       background: active ? `${color}14` : "#fff",
       transition: "all 0.15s", fontSize: 11, fontFamily: "'IBM Plex Mono', monospace",
-      color: active ? textColor : "#4b5563", fontWeight: 600,
+      color: active ? color : "#4b5563", fontWeight: 600,
     }}>
       <span style={{ width: 8, height: 8, borderRadius: 2, background: active ? color : "#d1d5db" }}/>
       {label}
@@ -59,222 +64,293 @@ function ToggleBtn({ label, active, color, textColor, onClick }) {
   );
 }
 
+function MaeCard({ label, color, stats }) {
+  return (
+    <div style={{ border: "1px solid #e5e7eb", borderLeft: `3px solid ${color}`,
+      borderRadius: 8, padding: "8px 12px", background: "#fff" }}>
+      <div style={{ fontSize: 9, color: "#4b5563", fontFamily: "'IBM Plex Sans', sans-serif",
+        textTransform: "uppercase", letterSpacing: 0.4 }}>{label}</div>
+      <div style={{ fontSize: 15, fontWeight: 700, fontFamily: "'IBM Plex Mono', monospace",
+        color: "#111827", marginTop: 2 }}>{fmtWh(stats?.mae_wh)}</div>
+      <div style={{ fontSize: 9, color: "#6b7280", fontFamily: "'IBM Plex Mono', monospace" }}>
+        n={stats?.n ?? 0}
+      </div>
+    </div>
+  );
+}
+
+function errorDatasets(rows) {
+  return MAE_KEYS.map(key => ({
+    label: key === "p50" ? "Quantile P50" : SERIES[key].label,
+    data: rows.map(row => row.models?.[key]?.mae_wh ?? null),
+    backgroundColor: BAR_COLORS[key],
+    borderRadius: 3,
+    borderSkipped: false,
+  }));
+}
+
 export default function PredictionsPage() {
-  const [visibleModels, setVisibleModels] = useState({
-    actual: true, sarima: true, xgboost: true,
+  const [visible, setVisible] = useState({
+    actual: true, seasonal_naive: false, xgboost: true, sarima: true, quantile: true,
   });
-  const [selectedMonth, setSelectedMonth] = useState(null);
-  const [selectedDay, setSelectedDay] = useState(15);
+  const [foldId, setFoldId] = useState(null);
+  const [selectedDate, setSelectedDate] = useState(null);
 
-  const { data: predMonthly, error: predMonthlyError } = useData(api.predMonthly);
-  const { data: predDaily, error: predDailyError } = useData((signal) => api.predDaily("", signal), []);
-  const { data: errData, error: errDataError } = useData(api.predMonthlyErrors);
-  const { data: stats, error: statsError } = useData(api.statistics);
+  const { data: daysData, loading: daysLoading, error: daysError } =
+    useData(api.backtestDays);
+  const { data: errors, loading: errorsLoading, error: errorsError } =
+    useData(api.backtestErrors);
 
-  // Derive the selected month/day instead of writing state during render.
-  const testMonths = predMonthly?.months || [];
-  const effectiveMonth = selectedMonth ?? testMonths[0] ?? null;
-  const dayOptions = effectiveMonth && predDaily
-    ? predDaily.labels
-        .filter(l => l.startsWith(`${effectiveMonth} `))
-        .map(l => Number(l.slice(4, 6)))
-        .filter(Number.isFinite)
-    : [];
-  const effectiveDay = dayOptions.includes(selectedDay)
-    ? selectedDay
-    : (dayOptions[dayOptions.length - 1] ?? selectedDay);
+  const folds = daysData?.folds || [];
+  const activeFold = folds.find(fold => fold.id === foldId) || folds[0] || null;
+  const foldDays = activeFold?.days || [];
+  const effectiveDate = foldDays.some(day => day.date === selectedDate)
+    ? selectedDate
+    : (foldDays[0]?.date ?? null);
 
-  const { data: predHourly, error: predHourlyError } = useData(
-    (signal) => effectiveMonth ? api.predHourly(effectiveMonth, effectiveDay, signal) : Promise.resolve(null),
-    [effectiveMonth, effectiveDay]
+  const { data: day, loading: dayLoading, error: dayError } = useData(
+    (signal) => effectiveDate
+      ? api.backtestDay(effectiveDate, signal)
+      : Promise.resolve(null),
+    [effectiveDate]
   );
 
-  const splitLabel = stats
-    ? `${(stats.train_hours / (stats.train_hours + stats.test_hours) * 100).toFixed(1)}% / ` +
-      `${(stats.test_hours / (stats.train_hours + stats.test_hours) * 100).toFixed(1)}% ` +
-      `(${stats.train_hours.toLocaleString()} / ${stats.test_hours.toLocaleString()} h)`
-    : "loading…";
+  if (daysError) return <DataError error={daysError} label="backtest days" />;
+  if (errorsError) return <DataError error={errorsError} label="backtest errors" />;
 
-  const toggle = (key) => setVisibleModels(p => ({ ...p, [key]: !p[key] }));
-
-  const opts = baseChartOptions;
-
-  function mkLineDatasets(data, keys) {
-    if (!data) return [];
-    return keys
-      .filter(k => visibleModels[k])
-      .map(k => ({
-        label: MODEL_COLORS[k].label,
-        data: data[k],
-        borderColor: MODEL_COLORS[k].border,
-        backgroundColor: MODEL_COLORS[k].bg,
-        borderWidth: k === "actual" ? 2.2 : 1.6,
-        borderDash: k === "sarima" ? [3,2] : k === "xgboost" ? [8,3] : [],
-        tension: 0.35, pointRadius: 0, pointHoverRadius: 4, fill: false,
-      }));
+  if (daysLoading || errorsLoading) {
+    return <div style={{ color: "#4b5563", fontFamily: "'IBM Plex Mono', monospace" }}>
+      Loading backtest predictions...
+    </div>;
   }
 
-  const dataError = predMonthlyError || predDailyError || errDataError
-    || statsError || predHourlyError;
+  if (!folds.length) {
+    return (
+      <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 12,
+        padding: "18px 22px", fontSize: 12, color: "#4b5563",
+        fontFamily: "'IBM Plex Mono', monospace" }}>
+        No hourly backtest predictions available. Run evaluate.py to regenerate results.json.
+      </div>
+    );
+  }
+
+  const opts = baseChartOptions;
+  const toggle = key => setVisible(prev => ({ ...prev, [key]: !prev[key] }));
+
+  const yAxis = {
+    ...opts.scales.y,
+    title: {
+      display: true, text: "Wh", color: "#6b7280",
+      font: { family: "'IBM Plex Mono', monospace", size: 10 },
+    },
+  };
+
+  const hourlyDatasets = day ? [
+    {
+      label: "P10", data: day.p10, borderColor: "rgba(217,119,6,0.5)",
+      backgroundColor: "transparent", borderWidth: 1, borderDash: [3, 3],
+      pointRadius: 0, tension: 0.3, fill: false, hidden: !visible.quantile,
+    },
+    {
+      label: "P10–P90 band", data: day.p90, borderColor: "rgba(217,119,6,0.5)",
+      backgroundColor: "rgba(217,119,6,0.15)", borderWidth: 1, borderDash: [3, 3],
+      pointRadius: 0, tension: 0.3, fill: 0, hidden: !visible.quantile,
+    },
+    ...["actual", "seasonal_naive", "xgboost", "sarima"].map(key => ({
+      label: SERIES[key].label,
+      data: day[key],
+      borderColor: SERIES[key].color,
+      backgroundColor: "transparent",
+      borderDash: SERIES[key].dash,
+      borderWidth: key === "actual" ? 2.2 : 1.6,
+      pointRadius: 0, pointHoverRadius: 4, tension: 0.3, fill: false,
+      hidden: !visible[key],
+    })),
+    {
+      label: SERIES.p50.label, data: day.p50, borderColor: SERIES.p50.color,
+      backgroundColor: "transparent", borderWidth: 1.8, pointRadius: 0,
+      pointHoverRadius: 4, tension: 0.3, fill: false, hidden: !visible.quantile,
+    },
+  ] : [];
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 28 }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
 
-      <DataError error={dataError} label="prediction data" />
-
-      {/* Controls */}
-      <div style={{ background: "#fff", border: "1px solid #e5e7eb",
-        borderRadius: 12, padding: "16px 20px" }}>
-        <div style={{ fontSize: 11, fontWeight: 700, color: "#374151",
-          fontFamily: "'IBM Plex Mono', monospace", textTransform: "uppercase",
-          letterSpacing: 0.5, marginBottom: 12 }}>Model Visibility</div>
+      <Card title="Day-ahead backtest predictions"
+        sub="Every day is forecast from 00:00 IST using only earlier observations. The band is the uncalibrated P10–P90 quantile XGBoost interval; error breakdowns use hours with both an actual value and a seasonal-naive reference. SARIMA can cover fewer hours after long gaps.">
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-          {Object.entries(MODEL_COLORS).map(([k, v]) => (
-            <ToggleBtn key={k} label={v.label} active={visibleModels[k]}
-              color={v.border} textColor={v.text} onClick={() => toggle(k)} />
+          {folds.map(fold => (
+            <button key={fold.id} onClick={() => { setFoldId(fold.id); setSelectedDate(null); }}
+              style={{
+                padding: "5px 12px", borderRadius: 6, cursor: "pointer",
+                border: "1.5px solid",
+                borderColor: activeFold?.id === fold.id ? "#2563eb" : "#e5e7eb",
+                background: activeFold?.id === fold.id ? "#eff6ff" : "#fff",
+                color: activeFold?.id === fold.id ? "#2563eb" : "#4b5563",
+                fontFamily: "'IBM Plex Mono', monospace", fontSize: 11, fontWeight: 600,
+              }}>{fold.label}</button>
           ))}
-          <div style={{ marginLeft: "auto", fontSize: 11, color: "#4b5563",
-            fontFamily: "'IBM Plex Sans', sans-serif" }}>
-            Train / Test split: {splitLabel}
-          </div>
+          <select value={effectiveDate || ""}
+            onChange={event => setSelectedDate(event.target.value)}
+            disabled={!foldDays.length}
+            style={{ marginLeft: "auto", padding: "5px 10px", borderRadius: 6,
+              border: "1.5px solid #e5e7eb", fontFamily: "'IBM Plex Mono', monospace",
+              fontSize: 11, color: "#374151", cursor: "pointer", background: "#fff",
+              maxWidth: "100%" }}>
+            {foldDays.map(foldDay => (
+              <option key={foldDay.date} value={foldDay.date}>
+                {foldDay.date} · {foldDay.weekday} · {foldDay.eval_hours} h
+              </option>
+            ))}
+          </select>
         </div>
-      </div>
+      </Card>
 
-      {/* Monthly bar comparison */}
-      <ChartCard title="Monthly Average Load — Actual vs All Models"
-        sub="Average hourly load (Wh) per test month"
-        height={280}>
-        {predMonthly && (
-          <Bar
-            data={{
-              labels: predMonthly.months,
-              datasets: Object.entries(BAR_BG)
-                .filter(([k]) => visibleModels[k])
-                .map(([k, bg]) => ({
-                  label: MODEL_COLORS[k].label,
-                  data: predMonthly[k] || predMonthly["actual"],
-                  backgroundColor: bg,
-                  borderRadius: 4,
-                  borderSkipped: false,
-                }))
-            }}
-            options={{ ...opts, plugins: { ...opts.plugins } }}
-          />
-        )}
-      </ChartCard>
+      <DataError error={dayError} label="selected day" />
 
-      {/* Daily time series */}
-      <ChartCard title="Daily Average Load — Full Test Period"
-        sub="Day-by-day comparison of model predictions vs actual consumption (Wh)"
-        height={280}>
-        {predDaily && (
-          <Line
-            data={{
-              labels: predDaily.labels,
-              datasets: mkLineDatasets(predDaily, ["actual","sarima","xgboost"])
-            }}
-            options={{
-              ...opts,
-              scales: {
-                ...opts.scales,
-                x: { ...opts.scales.x, ticks: { ...opts.scales.x.ticks, maxTicksLimit: 12 } }
-              }
-            }}
-          />
-        )}
-      </ChartCard>
+      {dayLoading && !day && (
+        <div style={{ color: "#4b5563", fontFamily: "'IBM Plex Mono', monospace", fontSize: 12 }}>
+          Loading selected day...
+        </div>
+      )}
 
-      {/* Hourly single-day prediction */}
-      <div>
-        <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 14, flexWrap: "wrap" }}>
-          <div>
-            <div style={{ fontSize: 11, fontWeight: 700, color: "#374151",
-              fontFamily: "'IBM Plex Mono', monospace",
-              textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>
-              Hourly Prediction — Select Day
+      {day && (
+        <>
+          <Card>
+            <div style={{ display: "flex", alignItems: "baseline", gap: 12, flexWrap: "wrap" }}>
+              <div style={{ fontSize: 14, fontWeight: 700, color: "#111827",
+                fontFamily: "'IBM Plex Mono', monospace" }}>
+                {day.weekday}, {day.date}
+              </div>
+              <div style={{ fontSize: 11, color: "#4b5563", fontFamily: "'IBM Plex Sans', sans-serif" }}>
+                {day.fold_label} · {day.n_eval_hours} evaluable hours · actual peak {fmtWh(day.actual_peak_wh)}
+                {" "}· actual mean {fmtWh(day.actual_mean_wh)}
+              </div>
             </div>
-            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-              {testMonths.map(m => (
-                <button key={m} onClick={() => setSelectedMonth(m)} style={{
-                  padding: "4px 12px", borderRadius: 6, cursor: "pointer",
-                  border: "1.5px solid",
-                  borderColor: effectiveMonth === m ? "#2563eb" : "#e5e7eb",
-                  background: effectiveMonth === m ? "#eff6ff" : "#fff",
-                  color: effectiveMonth === m ? "#2563eb" : "#4b5563",
-                  fontFamily: "'IBM Plex Mono', monospace", fontSize: 11, fontWeight: 600,
-                }}>{m}</button>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))",
+              gap: 8, marginTop: 12 }}>
+              {MAE_KEYS.map(key => (
+                <MaeCard key={key}
+                  label={key === "p50" ? "Quantile P50" : SERIES[key].label}
+                  color={SERIES[key].color}
+                  stats={day.model_mae?.[key]} />
               ))}
-              <select value={effectiveDay} onChange={e => setSelectedDay(Number(e.target.value))}
-                disabled={dayOptions.length === 0}
-                style={{ padding: "4px 10px", borderRadius: 6,
-                  border: "1.5px solid #e5e7eb", fontFamily: "'IBM Plex Mono', monospace",
-                  fontSize: 11, color: "#374151", cursor: "pointer", background: "#fff" }}>
-                {dayOptions.map(d => (
-                  <option key={d} value={d}>Day {d}</option>
-                ))}
-              </select>
             </div>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 14 }}>
+              {["actual", "xgboost", "sarima", "seasonal_naive"].map(key => (
+                <ToggleBtn key={key} label={SERIES[key].label}
+                  active={visible[key]} color={SERIES[key].color}
+                  onClick={() => toggle(key)} />
+              ))}
+              <ToggleBtn label="P10–P90 / P50" active={visible.quantile}
+                color="#d97706" onClick={() => toggle("quantile")} />
+            </div>
+          </Card>
+
+          <Card title={`Hourly load — ${day.date}`}
+            sub="Actual versus day-ahead forecasts (Wh per reporting apartment)">
+            <div style={{ height: 320 }}>
+              <Line
+                data={{ labels: day.labels, datasets: hourlyDatasets }}
+                options={{
+                  ...opts,
+                  scales: { ...opts.scales, y: yAxis },
+                  plugins: {
+                    ...opts.plugins,
+                    legend: {
+                      ...opts.plugins.legend,
+                      labels: {
+                        ...opts.plugins.legend.labels,
+                        filter: item => item.text !== "P10",
+                      },
+                    },
+                    tooltip: {
+                      ...opts.plugins.tooltip,
+                      callbacks: {
+                        label: ctx => ctx.parsed.y === null
+                          ? `${ctx.dataset.label}: N/A`
+                          : `${ctx.dataset.label}: ${ctx.parsed.y.toFixed(1)} Wh`,
+                      },
+                    },
+                  },
+                }}
+              />
+            </div>
+          </Card>
+        </>
+      )}
+
+      {errors && (
+        <>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: 14 }}>
+            <Card title="MAE by hour of day" sub="Pooled across all four folds; each model uses its available hours" height={250}>
+              <Bar
+                data={{
+                  labels: errors.by_hour.map(row => `${String(row.hour).padStart(2, "0")}:00`),
+                  datasets: errorDatasets(errors.by_hour),
+                }}
+                options={{ ...opts, scales: { ...opts.scales, y: yAxis } }}
+              />
+            </Card>
+            <Card title="MAE by calendar month" sub="Months present in the four test folds" height={250}>
+              <Bar
+                data={{
+                  labels: errors.by_month.map(row => row.label),
+                  datasets: errorDatasets(errors.by_month),
+                }}
+                options={{ ...opts, scales: { ...opts.scales, y: yAxis } }}
+              />
+            </Card>
           </div>
-        </div>
-        <ChartCard height={270}>
-          {predHourly && (
-            <Line
-              data={{
-                labels: predHourly.labels,
-                datasets: mkLineDatasets(predHourly, ["actual","sarima","xgboost"])
-              }}
-              options={{
-                ...opts,
-                plugins: {
-                  ...opts.plugins,
-                  title: {
-                    display: true,
-                    text: `24-Hour Prediction — ${predHourly.date}`,
-                    color: "#374151",
-                    font: { family: "'IBM Plex Mono', monospace", size: 11 },
-                    padding: { bottom: 8 }
-                  }
-                }
-              }}
-            />
-          )}
-        </ChartCard>
-      </div>
 
-      {/* Per-month error breakdown — MAE */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
-        <ChartCard title="Monthly MAE — All Models"
-          sub="Mean Absolute Error (Wh) per test month" height={240}>
-          {errData && (
-            <Bar
-              data={{
-                labels: errData.months,
-                datasets: [
-                  { label: "SARIMA MAE",  data: errData.months.map(m => errData.sarima[m].mae),  backgroundColor: "rgba(220,38,38,0.78)",  borderRadius: 4 },
-                  { label: "XGBoost MAE", data: errData.months.map(m => errData.xgboost[m].mae), backgroundColor: "rgba(22,163,74,0.78)",  borderRadius: 4 },
-                ].filter((_, i) => [visibleModels.sarima, visibleModels.xgboost][i])
-              }}
-              options={opts}
-            />
-          )}
-        </ChartCard>
-
-        <ChartCard title="Monthly RMSE — All Models"
-          sub="Root Mean Square Error (Wh) per test month" height={240}>
-          {errData && (
-            <Bar
-              data={{
-                labels: errData.months,
-                datasets: [
-                  { label: "SARIMA RMSE",  data: errData.months.map(m => errData.sarima[m].rmse),  backgroundColor: "rgba(220,38,38,0.42)",  borderRadius: 4 },
-                  { label: "XGBoost RMSE", data: errData.months.map(m => errData.xgboost[m].rmse), backgroundColor: "rgba(22,163,74,0.42)",  borderRadius: 4 },
-                ].filter((_, i) => [visibleModels.sarima, visibleModels.xgboost][i])
-              }}
-              options={opts}
-            />
-          )}
-        </ChartCard>
-      </div>
+          <Card title="Worst days"
+            sub={`Top 10 days ranked by ${errors.ranking}. Per-model n counts the hours actually scored.`}>
+            <div style={{ overflowX: "auto" }}>
+              <table style={{ borderCollapse: "collapse", width: "max-content",
+                minWidth: "100%", fontFamily: "'IBM Plex Mono', monospace", fontSize: 11 }}>
+                <thead>
+                  <tr style={{ borderBottom: "2px solid #e5e7eb" }}>
+                    {["Date", "Fold", "Day", "Hours", "Actual peak", "XGBoost", "SARIMA", "Quantile P50", "Seasonal naive"].map(header => (
+                      <th key={header} style={{
+                        padding: "8px 10px", whiteSpace: "nowrap",
+                        textAlign: header === "Date" ? "left" : "right",
+                        fontSize: 9, color: "#4b5563", fontWeight: 700,
+                        textTransform: "uppercase", letterSpacing: 0.5,
+                      }}>{header}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {errors.worst_days.map(row => (
+                    <tr key={`${row.fold_label}-${row.date}`}
+                      style={{ borderBottom: "1px solid #f3f4f6" }}>
+                      <td style={{ padding: "8px 10px", whiteSpace: "nowrap" }}>{row.date}</td>
+                      <td style={{ padding: "8px 10px", textAlign: "right", whiteSpace: "nowrap",
+                        color: "#4b5563" }}>{row.fold_label}</td>
+                      <td style={{ padding: "8px 10px", textAlign: "right" }}>{row.weekday}</td>
+                      <td style={{ padding: "8px 10px", textAlign: "right", color: "#4b5563" }}>
+                        {row.n_eval_hours}
+                      </td>
+                      <td style={{ padding: "8px 10px", textAlign: "right" }}>{fmtWh(row.actual_peak_wh)}</td>
+                      {MAE_KEYS.map(key => (
+                        <td key={key} title={`n=${row.models?.[key]?.n ?? 0}`}
+                          style={{ padding: "8px 10px", textAlign: "right", whiteSpace: "nowrap" }}>
+                          {fmtWh(row.models?.[key]?.mae_wh)}
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div style={{ marginTop: 10, fontSize: 10, color: "#4b5563",
+              fontFamily: "'IBM Plex Sans', sans-serif" }}>
+              Rankings are computed from the committed backtest artifact; hovering a model cell shows its paired hour count.
+              Days with fewer than 12 evaluable hours are excluded from the ranking.
+            </div>
+          </Card>
+        </>
+      )}
     </div>
   );
 }

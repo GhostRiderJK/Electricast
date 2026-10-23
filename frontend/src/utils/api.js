@@ -12,6 +12,9 @@ async function get(path, signal) {
 export const api = {
   metrics:            (signal) => get("/api/metrics", signal),
   backtestSummary:    (signal) => get("/api/backtest/summary", signal),
+  backtestDays:       (signal) => get("/api/backtest/days", signal),
+  backtestDay:        (date, signal) => get(`/api/backtest/day?date=${encodeURIComponent(date)}`, signal),
+  backtestErrors:     (signal) => get("/api/backtest/errors", signal),
   dataQuality:        (signal) => get("/api/data_quality", signal),
   statistics:         (signal) => get("/api/eda/statistics", signal),
   edaHourly:          (signal) => get("/api/eda/hourly", signal),
