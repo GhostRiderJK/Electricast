@@ -21,3 +21,9 @@ One entry per iteration: date, item id, change, evidence, numbers.
 - Removed unused `Radar` / `RadialLinearScale` imports and registration from `MetricsPage.jsx`.
 - Moved `Template.ipynb` (6,302,153 B) to `notebooks/legacy/Template.ipynb` with `git mv`.
 - Evidence: grep for removed symbols returns no hits in runtime code (`LSTM_WINDOW` remains only in `train_models.py` where it is written into stats); backend import + TestClient GETs `/`, `/api/metrics`, `/api/eda/statistics` all returned 200; `npm run build` succeeded (44 modules, built in 1.58s).
+
+## 2026-10-23 — 1.1 Wh/kWh labels corrected
+
+- Replaced every UI `kWh` label with `Wh` (values are Wh): EDAPage stats/title/axis/dataset labels, MetricsBar RMSE/MAE, MetricsPage score badges/titles/table, PredictionsPage subtitles, WeeklyPage chart titles, UploadPage metric/table/chart labels.
+- Backend upload `scale_note` now states `Wh` for upload/train means.
+- Evidence: `grep -rn kWh frontend/src` → none (only remaining backend hits are the input CSV column name); production bundle rebuilt successfully; TestClient upload of `smart_home_dataset.csv` returned 200 with `scale_note: ... upload mean: 54.8 Wh, train mean: 7400.2 Wh`.

@@ -38,7 +38,7 @@ function ScoreBadge({ label, value, best, type }) {
         color: isBest ? "#16a34a" : "#111827", marginTop: 3 }}>
         {typeof value === "number" ? value.toFixed(type === "r2" ? 4 : type === "pct" ? 1 : 0) : value}
         {type === "pct" && "%"}
-        {type === "wh" && " kWh"}
+        {type === "wh" && " Wh"}
       </div>
     </div>
   );
@@ -147,14 +147,14 @@ export default function MetricsPage() {
           <div style={{ fontSize: 11, fontWeight: 700, color: "#374151",
             fontFamily: "'IBM Plex Mono', monospace",
             textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 14 }}>
-            RMSE (kWh) — lower = better
+            RMSE (Wh) — lower = better
           </div>
           <div style={{ height: 220 }}>
             <Bar
               data={{
                 labels: MODELS.map(m => m.label),
                 datasets: [{
-                  label: "RMSE (kWh)",
+                  label: "RMSE (Wh)",
                   data: MODELS.map(m => data[m.key].RMSE),
                   backgroundColor: MODELS.map(m => m.bg.replace("0.15", "0.75")),
                   borderColor: MODELS.map(m => m.color),
@@ -172,14 +172,14 @@ export default function MetricsPage() {
           <div style={{ fontSize: 11, fontWeight: 700, color: "#374151",
             fontFamily: "'IBM Plex Mono', monospace",
             textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 14 }}>
-            MAE (kWh) — lower = better
+            MAE (Wh) — lower = better
           </div>
           <div style={{ height: 220 }}>
             <Bar
               data={{
                 labels: MODELS.map(m => m.label),
                 datasets: [{
-                  label: "MAE (kWh)",
+                  label: "MAE (Wh)",
                   data: MODELS.map(m => data[m.key].MAE),
                   backgroundColor: MODELS.map(m => m.bg.replace("0.15", "0.75")),
                   borderColor: MODELS.map(m => m.color),
@@ -205,7 +205,7 @@ export default function MetricsPage() {
           fontFamily: "'IBM Plex Mono', monospace", fontSize: 12 }}>
           <thead>
             <tr style={{ borderBottom: "2px solid #e5e7eb" }}>
-              {["Model","R²","RMSE (kWh)","MAE (kWh)","sMAPE"].map(h => (
+              {["Model","R²","RMSE (Wh)","MAE (Wh)","sMAPE"].map(h => (
                 <th key={h} style={{ padding: "8px 12px", textAlign: h === "Model" ? "left" : "right",
                   fontSize: 10, color: "#6b7280", fontWeight: 700,
                   textTransform: "uppercase", letterSpacing: 0.5 }}>{h}</th>

@@ -120,7 +120,7 @@ export default function PredictionsPage() {
 
       {/* Monthly bar comparison */}
       <ChartCard title="Monthly Average Load — Actual vs All Models"
-        sub="Average hourly load (kWh) per test month"
+        sub="Average hourly load (Wh) per test month"
         height={280}>
         {predMonthly && (
           <Bar
@@ -143,7 +143,7 @@ export default function PredictionsPage() {
 
       {/* Daily time series */}
       <ChartCard title="Daily Average Load — Full Test Period"
-        sub="Day-by-day comparison of model predictions vs actual consumption (kWh)"
+        sub="Day-by-day comparison of model predictions vs actual consumption (Wh)"
         height={280}>
         {predDaily && (
           <Line
@@ -221,7 +221,7 @@ export default function PredictionsPage() {
       {/* Per-month error breakdown — MAE */}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
         <ChartCard title="Monthly MAE — All Models"
-          sub="Mean Absolute Error (kWh) per test month" height={240}>
+          sub="Mean Absolute Error (Wh) per test month" height={240}>
           {errData && (
             <Bar
               data={{
@@ -238,7 +238,7 @@ export default function PredictionsPage() {
         </ChartCard>
 
         <ChartCard title="Monthly RMSE — All Models"
-          sub="Root Mean Square Error (kWh) per test month" height={240}>
+          sub="Root Mean Square Error (Wh) per test month" height={240}>
           {errData && (
             <Bar
               data={{

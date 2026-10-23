@@ -139,9 +139,9 @@ export default function EDAPage() {
             { label: "Total Hours", value: stats.total_hours.toLocaleString(), unit: "" },
             { label: "Train Hours", value: stats.train_hours.toLocaleString(), unit: "" },
             { label: "Test Hours",  value: stats.test_hours.toLocaleString(), unit: "" },
-            { label: "Mean Load",   value: stats.W_mean.toFixed(1), unit: "kWh" },
-            { label: "Max Load",    value: stats.W_max.toFixed(1), unit: "kWh" },
-            { label: "Min Load",    value: stats.W_min.toFixed(1), unit: "kWh" },
+            { label: "Mean Load",   value: stats.W_mean.toFixed(1), unit: "Wh" },
+            { label: "Max Load",    value: stats.W_max.toFixed(1), unit: "Wh" },
+            { label: "Min Load",    value: stats.W_min.toFixed(1), unit: "Wh" },
             { label: "Peak Hour",   value: `${stats.peak_hour}:00`, unit: "" },
             { label: "Peak Month",  value: stats.peak_month, unit: "" },
           ].map(s => <StatBox key={s.label} {...s} />)}
@@ -151,14 +151,14 @@ export default function EDAPage() {
       {/* Yearly trend */}
       <div>
         <SectionHeader title="Yearly Load Trend"
-          sub="Full hourly electricity consumption trend (kWh)" />
+          sub="Full hourly electricity consumption trend (Wh)" />
         <ChartCard height={220}>
           {yearly && (
             <Line
               data={{
                 labels: yearly.labels.filter((_, i) => i % 3 === 0),
                 datasets: [{
-                  label: "Hourly Load (kWh)",
+                  label: "Hourly Load (Wh)",
                   data: yearly.actual.filter((_, i) => i % 3 === 0),
                   borderColor: COLORS.actual.line,
                   backgroundColor: "rgba(26,26,46,0.06)",
@@ -183,7 +183,7 @@ export default function EDAPage() {
       {/* 2×2 grid: hourly, monthly, daily, weekday/weekend */}
       <div>
         <SectionHeader title="Load Variation — Hourly · Monthly · Weekly"
-          sub="Average electricity consumption patterns across different time scales (kWh)" />
+          sub="Average electricity consumption patterns across different time scales (Wh)" />
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
 
           {/* Hourly profile */}
@@ -194,7 +194,7 @@ export default function EDAPage() {
                   labels: hourly.labels,
                   datasets: [
                     {
-                      label: "Mean Load (kWh)",
+                      label: "Mean Load (Wh)",
                       data: hourly.load,
                       borderColor: "#2563eb",
                       backgroundColor: "rgba(37,99,235,0.08)",
@@ -230,7 +230,7 @@ export default function EDAPage() {
                   labels: monthly.months,
                   datasets: [
                     {
-                      label: "Monthly Avg (kWh)",
+                      label: "Monthly Avg (Wh)",
                       data: monthly.load,
                       backgroundColor: monthly.load.map((v, i) => {
                         const t = i / 11;
@@ -256,7 +256,7 @@ export default function EDAPage() {
                 data={{
                   labels: daily.days,
                   datasets: [{
-                      label: "Daily Avg (kWh)",
+                      label: "Daily Avg (Wh)",
                     data: daily.load,
                     backgroundColor: daily.days.map((d, i) =>
                       i >= 5 ? "rgba(220,38,38,0.75)" : "rgba(37,99,235,0.75)"
@@ -277,7 +277,7 @@ export default function EDAPage() {
           </ChartCard>
 
           {/* Weekday vs Weekend */}
-          <ChartCard title="Weekday vs Weekend Hourly Profile">
+          <ChartCard title="Weekday vs Weekend Hourly Profile (Wh)">
             {wdwe && (
               <Line
                 data={{
@@ -310,7 +310,7 @@ export default function EDAPage() {
       {/* Heatmap */}
       <div>
         <SectionHeader title="Hour × Month Heatmap"
-          sub="Average load (kWh) for each hour of day × month combination — key for LSTM window design" />
+          sub="Average load (Wh) for each hour of day × month combination — key for LSTM window design" />
         <ChartCard height={280}>
           <Heatmap data={heatmap} />
         </ChartCard>

@@ -450,7 +450,7 @@ async def upload_validate(file: UploadFile = File(...)):
         "timezone_note": ("Smart Home data converted from UTC to IST (UTC+5:30) "
                           "to match India 2017 training data timezone."),
         "scale_note": (f"Scale factor applied: {scale_factor:.3f} "
-                       f"(upload mean: {upload_mean:.1f}, train mean: {train_mean:.1f})"),
+                       f"(upload mean: {upload_mean:.1f} Wh, train mean: {train_mean:.1f} Wh)"),
     }
 
     return {

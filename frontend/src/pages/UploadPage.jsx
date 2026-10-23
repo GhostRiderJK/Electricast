@@ -262,8 +262,8 @@ export default function UploadPage() {
           <div style={{ fontSize: 11, fontWeight: 700, color: "#16a34a", ...MONO, marginBottom: 10 }}>XGBoost</div>
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
             <MetricCard label="R²" value={metrics.xgboost.R2} color="#16a34a" />
-            <MetricCard label="RMSE" value={metrics.xgboost.RMSE} color="#16a34a" />
-            <MetricCard label="MAE" value={metrics.xgboost.MAE} color="#16a34a" />
+            <MetricCard label="RMSE (Wh)" value={metrics.xgboost.RMSE} color="#16a34a" />
+            <MetricCard label="MAE (Wh)" value={metrics.xgboost.MAE} color="#16a34a" />
             <MetricCard label="sMAPE" value={`${metrics.xgboost.sMAPE}%`} color="#16a34a" />
           </div>
         </div>
@@ -271,19 +271,19 @@ export default function UploadPage() {
 
       {/* Charts */}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
-        <ChartCard title="Monthly Avg — Actual vs Predictions" subtitle="First 6 months of uploaded dataset">
+        <ChartCard title="Monthly Avg — Actual vs Predictions" subtitle="First 6 months of uploaded dataset (Wh)">
           <Bar data={monthlyBarData} options={{
             ...baseChartOptions,
             plugins: { ...baseChartOptions.plugins, title: { display: false } },
           }} />
         </ChartCard>
 
-        <ChartCard title="Avg Hourly Profile" subtitle="24-hour load pattern comparison">
+        <ChartCard title="Avg Hourly Profile" subtitle="24-hour load pattern comparison (Wh)">
           <Line data={hourlyLineData} options={baseChartOptions} />
         </ChartCard>
       </div>
 
-      <ChartCard title="Daily Avg — Time Series" subtitle="Day-by-day comparison across validation period" height={280}>
+      <ChartCard title="Daily Avg — Time Series" subtitle="Day-by-day comparison across validation period (Wh)" height={280}>
         <Line data={dailyLineData} options={baseChartOptions} />
       </ChartCard>
 
@@ -297,8 +297,8 @@ export default function UploadPage() {
             <thead>
               <tr style={{ borderBottom: "2px solid #e5e7eb" }}>
                 <th style={{ textAlign: "left", padding: "8px 12px", color: "#6b7280" }}>Month</th>
-                <th style={{ textAlign: "right", padding: "8px 12px", color: "#16a34a" }}>XGB MAE</th>
-                <th style={{ textAlign: "right", padding: "8px 12px", color: "#16a34a" }}>XGB RMSE</th>
+                <th style={{ textAlign: "right", padding: "8px 12px", color: "#16a34a" }}>XGB MAE (Wh)</th>
+                <th style={{ textAlign: "right", padding: "8px 12px", color: "#16a34a" }}>XGB RMSE (Wh)</th>
               </tr>
             </thead>
             <tbody>

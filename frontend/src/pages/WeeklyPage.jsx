@@ -122,7 +122,7 @@ export default function WeeklyPage() {
         <div style={{ fontSize: 11, fontWeight: 700, color: "#374151",
           fontFamily: "'IBM Plex Mono', monospace",
           textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 14 }}>
-          All Days Overlay — LSTM Predictions
+          All Days Overlay — LSTM Predictions (Wh)
         </div>
         <div style={{ height: 250 }}>
           {weeklyData && (
@@ -157,7 +157,7 @@ export default function WeeklyPage() {
         <div style={{ fontSize: 11, fontWeight: 700, color: "#374151",
           fontFamily: "'IBM Plex Mono', monospace",
           textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 14 }}>
-          Average Daily Load by Weekday — Actual vs LSTM
+          Average Daily Load by Weekday — Actual vs LSTM (Wh)
         </div>
         <div style={{ height: 220 }}>
           {dayAvgs.length > 0 && (

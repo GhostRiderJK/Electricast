@@ -7,7 +7,7 @@ Rules: one task per iteration. Tick [x] only after the VERIFY step passes.
 - [x] 0.3 Remove dead _load_lstm_model(), unused Radar import; move Template.ipynb to notebooks/legacy/
 
 ## Phase 1 — Stop the UI lying
-- [ ] 1.1 Units: Wh vs kWh fixed in every label, axis and title (EDAPage, MetricsBar, MetricsPage, charts)
+- [x] 1.1 Units: Wh vs kWh fixed in every label, axis and title (EDAPage, MetricsBar, MetricsPage, charts)
 - [ ] 1.2 LSTM: backend emits status "disabled"; frontend filters by status ok; BEST logic ignores non-ok, handles ties, shows N/A
 - [ ] 1.3 WeeklyPage charts repointed from LSTM to XGBoost
 - [ ] 1.4 Yearly trend: backend emits daily means; frontend drops the i%3 filter and downsample=24
