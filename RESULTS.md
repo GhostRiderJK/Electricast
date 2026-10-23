@@ -2,7 +2,7 @@
 
 This document reports the five-fold day-ahead backtest plus one stress test stored in
 `backend/results.json`. All numbers below were read from that artifact (generated
-2026-10-23T23:36:15+05:30) and can be regenerated with:
+2026-10-23T23:52:19+05:30) and can be regenerated with:
 
 ```bash
 python backend/evaluate.py
@@ -41,6 +41,13 @@ through the FastAPI backend.
   resamples, seed 42). p-values are unadjusted; `small_sample` flags fewer than 10 days. Δ and
   the CI are hour-weighted, while the Wilcoxon test weights each day equally, so a few
   high-load days can make the two point in different directions.
+- **Conformal intervals:** the raw P10/P90 interval is recalibrated per test day with rolling
+  conformalized quantile regression (CQR). The conformity score is
+  `max(P10 − actual, actual − P90)` over the prior 28 test days **within the same fold** (at
+  least 7 days and 24 scores); q is the finite-sample 80% empirical quantile of those scores,
+  floored at zero, and the calibrated interval is `[P10 − q, P90 + q]`. A day uses only
+  strictly earlier days, so no actual from the scored day or later enters its interval. The
+  first 7 days of each fold are warm-up and keep the raw interval.
 - **Tuning:** the point XGBoost uses one frozen hyperparameter set tuned on 2016-12-14 to
   2017-05-31, a window that ends before the first scoring test month. There is no per-fold
   Optuna. Annual calendar features (`month`, `doy_sin`, `doy_cos`) are dropped when a fold's
@@ -296,7 +303,7 @@ deviations are large because December is a regime break: the XGBoost fold MAE ra
 
 The quantile XGBoost models produce P10/P50/P90. Coverage is the share of the model's scored
 hours with the actual inside [P10, P90]; the nominal level is 80%. Pinball loss is in Wh. These
-are the current intervals; conformal recalibration is a separate, later change.
+are the raw intervals, before conformal calibration.
 
 | Fold | n | Coverage | Mean width (Wh) | Pinball P10 | Pinball P50 | Pinball P90 | Pinball mean |
 |---|---:|---:|---:|---:|---:|---:|---:|
@@ -312,6 +319,32 @@ are the current intervals; conformal recalibration is a separate, later change.
 The intervals are close to nominal in July and August, undercover in June, and severely
 undercalibrated in September–December, especially December (30.84%). They are reported as
 calibration diagnostics, not as production-grade uncertainty bounds.
+
+### Conformal recalibration (rolling prior days)
+
+Each test day's interval is expanded by the 80% conformal quantile of the previous 28 test
+days' conformity scores in the same fold. "Calibrated days" excludes the 7-day warm-up, which
+is unchanged; "all days" averages over every scored day. Mean width is over all hours, so it
+includes the unchanged warm-up.
+
+| Fold | Scored days | Calibrated days | Before (cal. days) | After (cal. days) | Before (all days) | After (all days) | Mean width, all (Wh) | Median q (Wh) |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| 2017-06 | 30 | 23 | 71.01% | 79.71% | 72.64% | 79.31% | 206.31 → 232.62 | 18.79 |
+| 2017-07 | 31 | 24 | 80.90% | 80.90% | 82.26% | 82.26% | 204.99 → 204.99 | 0.00 |
+| 2017-08 | 31 | 24 | 81.60% | 82.12% | 80.65% | 81.05% | 190.97 → 193.01 | 0.00 |
+| 2017-09_11 | 76 | 69 | 55.29% | 74.09% | 56.93% | 74.22% | 246.06 → 421.34 | 113.23 |
+| 2017-12 | 26 | 19 | 35.00% | 71.32% | 30.84% | 56.02% | 352.38 → 453.58 | 82.46 |
+| Stress test | 8 | 1 | 57.14% | 57.14% | 73.63% | 73.63% | 246.70 → 249.25 | 16.53 |
+| Scoring, hour-weighted | 194 | 159 | — | — | 64.46% | 75.29% | 236.65 → 320.45 | — |
+
+Calibration raises coverage by 8.7 points on calibrated June days, 18.8 points in
+September–November and 21.3 points in December; the scoring hour-weighted coverage rises from
+64.46% to 75.29%. It does not reach the 80% target in September–November or December, because
+the conformity scores are not exchangeable across the vacancy regime shift: a 28-day window of
+past residuals cannot anticipate a break that starts on the scored day. Because q is floored at
+zero, calibration only widens intervals: July is unchanged, August moves 0.4 points, and the
+mean width grows from 236.65 to 320.45 Wh on the scoring folds. The stress test has only one
+calibrated day, so its after-coverage is context only.
 
 ## Data-quality inputs
 
@@ -358,6 +391,11 @@ generated JSON.
   test weights each day equally; the two can disagree when high-load days dominate.
 - December's bootstrap uses only three 7-day blocks, so its percentile CI is coarse. The
   direction of the learned-model loss is supported by both the daily median and the MAE.
+- Conformal calibration expands intervals only: the conformity quantile is floored at zero, so
+  overcovering days are never narrowed. Its coverage remains below the nominal 80% in
+  September–November (74.09% on calibrated days) and December (71.32%) because prior-day
+  residuals are not exchangeable across the vacancy regime shift. The 28-day window was chosen
+  a priori as four weekly cycles, not tuned on these folds; it is the same in every fold.
 - SARIMA's weekly refit cannot operate through the long 2018 gap; its stress score covers only
   38 hours.
 - Weather is a single regional grid point, not building-level measurements.

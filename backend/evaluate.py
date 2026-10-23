@@ -34,6 +34,11 @@ DAY_BOOTSTRAP_BLOCK_DAYS = 7
 DAY_BOOTSTRAP_REPS = 2000
 DAY_BOOTSTRAP_SEED = 42
 
+CONFORMAL_WINDOW_DAYS = 28
+CONFORMAL_MIN_DAYS = 7
+CONFORMAL_MIN_SCORES = 24
+CONFORMAL_ALPHA = 0.2
+
 # 9.5: one Optuna study on 2016-12-14..2017-05-31, before the first scoring
 # test month, frozen across folds. Copied from tuning_results.json; a test
 # keeps the two in sync.
@@ -118,7 +123,8 @@ PROTOCOL = {
     "significance": "two-sided Wilcoxon signed-rank on per-day MAE differences vs the fold's common-hours best baseline, plus a 95% block-bootstrap CI of the MAE difference (2,000 resamples of contiguous 7-day blocks, seed 42); p-values unadjusted; small_sample flags fewer than 10 days",
     "learned_models": "xgboost is fit on the fold's training window labels only; its features at target hour t use observations at t-lag with lag >= 24 h, so all features predate the day's 00:00 IST origin; reporting counts and weather are lagged >=24 h; calendar/holiday/semester flags are known in advance; labels clipped at a train-only Q3+3*IQR cap. sarima is refit weekly on the trailing 60 days before each Monday origin and advanced daily only with actuals before the day's origin",
     "sarima": "order (1,0,1)(0,1,1,24); weekly refit on the trailing 60 days of gap-handled target; daily state updates with actuals up to each origin; recovery refit after coverage gaps",
-    "quantiles": "xgboost_quantile fits one model per quantile (0.1, 0.5, 0.9) with objective reg:quantileerror on the same features, labels, and cap as xgboost; P10-P90 coverage and pinball loss are reported per fold, and P50 is also scored as a point forecast",
+    "quantiles": "xgboost_quantile fits one model per quantile (0.1, 0.5, 0.9) with objective reg:quantileerror on the same features, labels, and cap as xgboost; P10-P90 coverage and pinball loss are reported per fold, and P50 is also scored as a point forecast. A rolling conformalized quantile regression step widens or keeps the interval using only the previous 28 test days' conformity scores (minimum 7 days and 24 hours), so no same-day or future actual enters the calibration",
+    "conformal": "rolling CQR on P10-P90: for each IST test day, q is the finite-sample 80% empirical quantile of max(P10 - actual, actual - P90) over the prior 28 test days in the same fold; the interval becomes [P10 - q, P90 + q], q is floored at zero, and days with fewer than 7 prior days or 24 prior hours keep the raw interval",
     "tuning": "point xgboost uses hyperparameters frozen from one Optuna study on 2016-12-14..2017-05-31, a window that ends before the first scoring test month; the same parameters are used in every fold, with no per-fold test tuning. Annual calendar features are dropped when that fold's training span is under 365 days. The quantile models keep their fixed untuned defaults (4.6).",
     "common_hours": "evaluation mask intersected with the forecasts of all four baselines and all three learned models, so every row in the common-hours table is scored on exactly the same hours",
 }
@@ -248,6 +254,217 @@ def interval_metrics(actual, lower, median, upper):
         "pinball_90": _clean(pinball_90, 4),
         "pinball_mean": _clean((pinball_10 + pinball_50 + pinball_90) / 3, 4),
     }
+
+
+def _conformal_empty(reason):
+    return {
+        "status": "no_data",
+        "method": (
+            "rolling conformalized quantile regression (CQR) on the P10-P90 "
+            "interval using only prior test days' residuals"
+        ),
+        "score": "max(P10 - actual, actual - P90)",
+        "window_days": CONFORMAL_WINDOW_DAYS,
+        "min_days": CONFORMAL_MIN_DAYS,
+        "min_scores": CONFORMAL_MIN_SCORES,
+        "alpha": CONFORMAL_ALPHA,
+        "nominal_coverage": 1 - CONFORMAL_ALPHA,
+        "q_floor_wh": 0.0,
+        "n_days": 0,
+        "n_days_calibrated": 0,
+        "n_hours": 0,
+        "n_hours_calibrated": 0,
+        "warmup_days": 0,
+        "q_wh": {"min": None, "median": None, "max": None},
+        "before_calibrated_days": interval_metrics(
+            pd.Series(dtype=float), pd.Series(dtype=float),
+            pd.Series(dtype=float), pd.Series(dtype=float),
+        ),
+        "after_calibrated_days": interval_metrics(
+            pd.Series(dtype=float), pd.Series(dtype=float),
+            pd.Series(dtype=float), pd.Series(dtype=float),
+        ),
+        "before_all_days": interval_metrics(
+            pd.Series(dtype=float), pd.Series(dtype=float),
+            pd.Series(dtype=float), pd.Series(dtype=float),
+        ),
+        "after_all_days": interval_metrics(
+            pd.Series(dtype=float), pd.Series(dtype=float),
+            pd.Series(dtype=float), pd.Series(dtype=float),
+        ),
+        "daily": [],
+        "reason": reason,
+    }
+
+
+def conformal_calibrate_intervals(
+    actual,
+    quantile_frame,
+    eval_mask,
+    window_days=CONFORMAL_WINDOW_DAYS,
+    min_days=CONFORMAL_MIN_DAYS,
+    min_scores=CONFORMAL_MIN_SCORES,
+    alpha=CONFORMAL_ALPHA,
+):
+    """Rolling CQR calibration of P10-P90 from prior test days only.
+
+    For each IST day, the conformity score max(P10 - actual, actual - P90) is
+    computed on the prior ``window_days`` days of the same fold. The
+    finite-sample (1 - alpha) empirical quantile of those scores expands both
+    bounds by the same amount for that day. Calibration starts only after
+    ``min_days`` prior days and ``min_scores`` prior hours are available; before
+    that the raw interval is kept. The score is floored at zero, so calibration
+    can widen an interval but never narrow it.
+
+    Returns the calibration block and a frame with raw and calibrated bounds.
+    No actual from the day being calibrated (or later) enters its score.
+    """
+    frame = pd.concat(
+        [
+            pd.Series(actual).rename("actual"),
+            quantile_frame["p10"].rename("p10"),
+            quantile_frame["p50"].rename("p50"),
+            quantile_frame["p90"].rename("p90"),
+        ],
+        axis=1,
+    ).loc[eval_mask].dropna()
+    if frame.empty:
+        result = _conformal_empty("no evaluation hours with target and quantiles")
+        empty = quantile_frame.copy()
+        empty["p10_calibrated"] = empty["p10"]
+        empty["p90_calibrated"] = empty["p90"]
+        return result, empty
+
+    frame = frame.copy()
+    frame["day"] = frame.index.floor("D")
+    days = sorted(frame["day"].unique())
+    day_set = set(days)
+
+    daily = []
+    q_by_day = {}
+    calibrated_by_day = {}
+    for day in days:
+        past = [
+            candidate for candidate in days
+            if day - pd.Timedelta(days=window_days) <= candidate < day
+        ]
+        past = [candidate for candidate in past if candidate in day_set]
+        if len(past) < min_days:
+            daily.append({
+                "day": day.strftime("%Y-%m-%d"),
+                "n_past_days": len(past),
+                "n_scores": 0,
+                "q_wh": None,
+                "calibrated": False,
+                "reason": "warm-up: fewer than min_days prior days",
+            })
+            calibrated_by_day[day] = False
+            continue
+
+        past_frame = frame[frame["day"].isin(past)]
+        scores = np.maximum(
+            past_frame["p10"].to_numpy(dtype=float)
+            - past_frame["actual"].to_numpy(dtype=float),
+            past_frame["actual"].to_numpy(dtype=float)
+            - past_frame["p90"].to_numpy(dtype=float),
+        )
+        if len(scores) < min_scores:
+            daily.append({
+                "day": day.strftime("%Y-%m-%d"),
+                "n_past_days": len(past),
+                "n_scores": int(len(scores)),
+                "q_wh": None,
+                "calibrated": False,
+                "reason": "fewer than min_scores prior hours",
+            })
+            calibrated_by_day[day] = False
+            continue
+
+        rank = min(
+            len(scores),
+            int(np.ceil((len(scores) + 1) * (1 - alpha))),
+        )
+        q = max(0.0, float(np.sort(scores)[rank - 1]))
+        q_by_day[day] = q
+        calibrated_by_day[day] = True
+        daily.append({
+            "day": day.strftime("%Y-%m-%d"),
+            "n_past_days": len(past),
+            "n_scores": int(len(scores)),
+            "q_wh": _clean(q, 4),
+            "calibrated": True,
+        })
+
+    calibrated = quantile_frame.copy()
+    calibrated["p10_calibrated"] = calibrated["p10"]
+    calibrated["p90_calibrated"] = calibrated["p90"]
+    q_series = frame["day"].map(q_by_day)
+    adjusted = calibrated.index.isin(frame.index)
+    q_values = q_series.reindex(calibrated.index).fillna(0.0)
+    calibrated.loc[adjusted, "p10_calibrated"] = np.maximum(
+        0.0, calibrated.loc[adjusted, "p10"] - q_values.loc[adjusted]
+    )
+    calibrated.loc[adjusted, "p90_calibrated"] = (
+        calibrated.loc[adjusted, "p90"] + q_values.loc[adjusted]
+    )
+
+    calibrated_mask = frame["day"].map(calibrated_by_day).fillna(False)
+    calibrated_index = frame.index[calibrated_mask.to_numpy()]
+    before_calibrated = interval_metrics(
+        frame.loc[calibrated_mask, "actual"],
+        frame.loc[calibrated_mask, "p10"],
+        frame.loc[calibrated_mask, "p50"],
+        frame.loc[calibrated_mask, "p90"],
+    )
+    after_calibrated = interval_metrics(
+        frame.loc[calibrated_mask, "actual"],
+        calibrated.loc[calibrated_index, "p10_calibrated"],
+        calibrated.loc[calibrated_index, "p50"],
+        calibrated.loc[calibrated_index, "p90_calibrated"],
+    )
+    before_all = interval_metrics(
+        frame["actual"], frame["p10"], frame["p50"], frame["p90"]
+    )
+    after_all = interval_metrics(
+        frame["actual"],
+        calibrated.loc[frame.index, "p10_calibrated"],
+        calibrated.loc[frame.index, "p50"],
+        calibrated.loc[frame.index, "p90_calibrated"],
+    )
+
+    q_values_used = [q for q in q_by_day.values()]
+    result = {
+        "status": "ok" if calibrated_mask.any() else "no_calibrated_days",
+        "method": (
+            "rolling conformalized quantile regression (CQR) on the P10-P90 "
+            "interval using only prior test days' residuals"
+        ),
+        "score": "max(P10 - actual, actual - P90)",
+        "window_days": int(window_days),
+        "min_days": int(min_days),
+        "min_scores": int(min_scores),
+        "alpha": float(alpha),
+        "nominal_coverage": _clean(1 - alpha, 4),
+        "q_floor_wh": 0.0,
+        "n_days": len(days),
+        "n_days_calibrated": int(len(q_by_day)),
+        "n_hours": int(len(frame)),
+        "n_hours_calibrated": int(frame["day"].isin(q_by_day.keys()).sum()),
+        "warmup_days": int(len(days) - len(q_by_day)),
+        "q_wh": {
+            "min": _clean(min(q_values_used), 4) if q_values_used else None,
+            "median": _clean(float(np.median(q_values_used)), 4)
+            if q_values_used else None,
+            "max": _clean(max(q_values_used), 4) if q_values_used else None,
+        },
+        "before_calibrated_days": before_calibrated,
+        "after_calibrated_days": after_calibrated,
+        "before_all_days": before_all,
+        "after_all_days": after_all,
+        "daily": daily,
+        "reason": None,
+    }
+    return result, calibrated
 
 
 def paired_significance(actual, pred, baseline_pred):
@@ -520,7 +737,8 @@ def common_hours_block(actual, preds, eval_mask, scale):
     }
 
 
-def _hourly_records(actual, preds, quantile_frame, mask):
+def _hourly_records(actual, preds, quantile_frame, mask,
+                    calibrated_quantile_frame=None):
     """Per-hour evaluation rows for the dashboard (Wh, local IST timestamps)."""
     sources = {
         "actual": actual,
@@ -530,6 +748,14 @@ def _hourly_records(actual, preds, quantile_frame, mask):
         "p10": quantile_frame["p10"] if quantile_frame is not None else None,
         "p50": quantile_frame["p50"] if quantile_frame is not None else None,
         "p90": quantile_frame["p90"] if quantile_frame is not None else None,
+        "p10_calibrated": (
+            calibrated_quantile_frame["p10_calibrated"]
+            if calibrated_quantile_frame is not None else None
+        ),
+        "p90_calibrated": (
+            calibrated_quantile_frame["p90_calibrated"]
+            if calibrated_quantile_frame is not None else None
+        ),
     }
     columns = ["time"] + list(sources)
     rows = []
@@ -596,6 +822,7 @@ def evaluate_fold(series, fold, reporting=None, weather_frame=None):
         models[name] = compute_metrics(actual[mask], preds[name][mask], scale)
 
     intervals = {}
+    calibrated_quantiles = None
     if quantile_frame is not None:
         intervals["xgboost_quantile"] = interval_metrics(
             actual[mask],
@@ -603,6 +830,8 @@ def evaluate_fold(series, fold, reporting=None, weather_frame=None):
             quantile_frame.loc[mask, "p50"],
             quantile_frame.loc[mask, "p90"],
         )
+        intervals["conformal"], calibrated_quantiles = \
+            conformal_calibrate_intervals(actual, quantile_frame, mask)
 
     best, selection_mask, selection_hours, selection_metrics = select_best_baseline(
         actual, preds, mask, scale
@@ -631,7 +860,9 @@ def evaluate_fold(series, fold, reporting=None, weather_frame=None):
         "models": models,
         "common_hours": common,
         "intervals": intervals,
-        "hourly": _hourly_records(actual, preds, quantile_frame, mask),
+        "hourly": _hourly_records(
+            actual, preds, quantile_frame, mask, calibrated_quantiles
+        ),
         "model_fit": model_fit,
         "best_baseline": best,
         "selection": {
@@ -756,6 +987,13 @@ def main():
                       f"hours={meta.get('predicted_hours')}, "
                       f"failures={meta.get('fit_failures')}")
         for name, im in fold.get("intervals", {}).items():
+            if name == "conformal":
+                print(f"interval conformal: days={im['n_days']} "
+                      f"calibrated={im['n_days_calibrated']} "
+                      f"warmup={im['warmup_days']} "
+                      f"coverage before={_show(im['before_calibrated_days']['coverage'], 3)} "
+                      f"after={_show(im['after_calibrated_days']['coverage'], 3)}")
+                continue
             print(f"interval {name}: n={im['n']} coverage={_show(im['coverage'], 3)} "
                   f"width={_show(im['mean_width_wh'])} Wh "
                   f"pinball={_show(im['pinball_mean'], 3)}")

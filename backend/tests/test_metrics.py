@@ -208,3 +208,99 @@ def test_daily_significance_reports_no_data_without_overlap():
     assert result["mae_diff_wh"] is None
     assert result["p_value"] is None
     assert result["reason"] == "no paired hours"
+
+
+def _conformal_frame(days=10):
+    index = pd.date_range(
+        "2021-01-01", periods=days * 24, freq="h", tz=ev.dp.TZ
+    )
+    actual = np.full(len(index), 10.0)
+    actual[index >= index[0] + pd.Timedelta(days=5)] = 30.0
+    actual = pd.Series(actual, index=index)
+    quantiles = pd.DataFrame(
+        {
+            "p10": np.full(len(index), 9.0),
+            "p50": np.full(len(index), 10.0),
+            "p90": np.full(len(index), 11.0),
+        },
+        index=index,
+    )
+    return actual, quantiles, index
+
+
+def test_conformal_calibration_uses_only_prior_days():
+    actual, quantiles, index = _conformal_frame()
+    mask = pd.Series(True, index=index)
+
+    result, calibrated = ev.conformal_calibrate_intervals(
+        actual, quantiles, mask, window_days=5, min_days=3, min_scores=24
+    )
+
+    assert result["status"] == "ok"
+    assert result["n_days"] == 10
+    assert result["n_days_calibrated"] == 7
+    assert result["warmup_days"] == 3
+    assert result["n_hours_calibrated"] == 7 * 24
+    q_by_day = {row["day"]: row["q_wh"] for row in result["daily"]}
+    # Day 4 sees only the normal regime; the first spike day (Jan 5) cannot
+    # leak its own score into its own interval.
+    assert q_by_day["2021-01-04"] == 0.0
+    assert q_by_day["2021-01-05"] == 0.0
+    # Day 8 sees three spiked days (Jan 5-7) in its five-day window, so q is 19.
+    assert q_by_day["2021-01-08"] == 19.0
+    # Day 9 sees 60% spiked scores in its five-day window, so q expands by 19 Wh.
+    assert q_by_day["2021-01-09"] == 19.0
+    assert q_by_day["2021-01-10"] == 19.0
+
+    assert result["before_calibrated_days"]["coverage"] < \
+        result["after_calibrated_days"]["coverage"]
+    assert result["after_all_days"]["coverage"] == 0.9
+    assert result["after_all_days"]["mean_width_wh"] > \
+        result["before_all_days"]["mean_width_wh"]
+    # Warm-up days keep the raw interval exactly.
+    warm = index.floor("D") < index[0] + pd.Timedelta(days=3)
+    assert np.array_equal(
+        calibrated.loc[warm, "p10_calibrated"].to_numpy(),
+        quantiles.loc[warm, "p10"].to_numpy(),
+    )
+
+
+def test_conformal_calibration_never_narrows_an_overwide_interval():
+    index = pd.date_range(
+        "2021-01-01", periods=8 * 24, freq="h", tz=ev.dp.TZ
+    )
+    actual = pd.Series(50.0, index=index)
+    quantiles = pd.DataFrame(
+        {
+            "p10": np.zeros(len(index)),
+            "p50": np.full(len(index), 50.0),
+            "p90": np.full(len(index), 100.0),
+        },
+        index=index,
+    )
+    result, calibrated = ev.conformal_calibrate_intervals(
+        actual, quantiles, pd.Series(True, index=index),
+        window_days=5, min_days=3, min_scores=24,
+    )
+    assert result["q_wh"]["max"] == 0.0
+    assert np.array_equal(
+        calibrated["p10_calibrated"].to_numpy(),
+        quantiles["p10"].to_numpy(),
+    )
+    assert np.array_equal(
+        calibrated["p90_calibrated"].to_numpy(),
+        quantiles["p90"].to_numpy(),
+    )
+    assert result["before_calibrated_days"]["coverage"] == 1.0
+    assert result["after_calibrated_days"]["coverage"] == 1.0
+
+
+def test_conformal_calibration_reports_no_data_without_evaluation_hours():
+    actual, quantiles, index = _conformal_frame(3)
+    result, calibrated = ev.conformal_calibrate_intervals(
+        actual, quantiles, pd.Series(False, index=index)
+    )
+    assert result["status"] == "no_data"
+    assert result["n_days"] == 0
+    assert result["reason"] == "no evaluation hours with target and quantiles"
+    assert "p10_calibrated" in calibrated.columns
