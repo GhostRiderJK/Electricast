@@ -521,12 +521,14 @@ def main():
             "R2": 0, "RMSE": 0, "MAE": 0, "sMAPE": 0,
             "label": "LSTM",
             "color": "#2563eb",
+            "status": "disabled",
             "period": "(disabled)",
             "description": "LSTM training disabled — re-enable in train_models.py",
         },
         "sarima": {
             **calc_metrics(test_vals, sarima_preds),
             "label": "SARIMA",
+            "status": "ok",
             "color": "#dc2626",
             "period": "Train: Jan–Jun 2017 | Test: Jul–Dec 2017",
             "description": (f"SARIMA(1,1,1)(1,1,1,24) — "
@@ -535,6 +537,7 @@ def main():
         "xgboost": {
             **calc_metrics(test_vals, xgb_aligned),
             "label": "XGBoost",
+            "status": "ok",
             "color": "#16a34a",
             "period": "Train: Jan–Jun 2017 | Test: Jul–Dec 2017",
             "description": "XGBoost with lag features (1h–168h), rolling stats, 500 trees, LR=0.05",

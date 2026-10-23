@@ -72,7 +72,6 @@ export default function App() {
           {/* Badge */}
           <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
             {[
-              { label: "LSTM", color: "#2563eb" },
               { label: "SARIMA", color: "#dc2626" },
               { label: "XGBoost", color: "#16a34a" },
             ].map(({ label, color }) => (
@@ -109,7 +108,7 @@ export default function App() {
         padding: "12px 28px", textAlign: "center" }}>
         <div style={{ fontSize: 10, color: "#9ca3af", fontFamily: "'IBM Plex Mono', monospace" }}>
           ElectriCast &nbsp;·&nbsp; Energy Demand Forecasting &nbsp;·&nbsp;
-          LSTM · SARIMA · XGBoost
+          SARIMA · XGBoost
         </div>
       </footer>
     </div>

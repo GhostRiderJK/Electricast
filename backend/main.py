@@ -39,12 +39,16 @@ DATA = None
 MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
                "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
 
+MODEL_STATUS = {"lstm": "disabled", "sarima": "ok", "xgboost": "ok"}
+
 
 def load_results():
     global DATA
     if os.path.exists(RESULTS_PATH):
         with open(RESULTS_PATH, "r") as f:
             DATA = json.load(f)
+        for name, model_metrics in DATA.get("metrics", {}).items():
+            model_metrics.setdefault("status", MODEL_STATUS.get(name, "ok"))
         print(f"Loaded model results from {RESULTS_PATH}")
     else:
         print(f"{RESULTS_PATH} not found. Run: python train_models.py")

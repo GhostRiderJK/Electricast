@@ -17,7 +17,8 @@ const MODELS = [
 ];
 
 function ScoreBadge({ label, value, best, type }) {
-  const isBest = value === best;
+  const hasValue = Number.isFinite(value);
+  const isBest = hasValue && best !== null && value === best;
   return (
     <div style={{
       textAlign: "center", padding: "12px 10px",
@@ -36,9 +37,9 @@ function ScoreBadge({ label, value, best, type }) {
       <div style={{ fontSize: 17, fontWeight: 700,
         fontFamily: "'IBM Plex Mono', monospace",
         color: isBest ? "#16a34a" : "#111827", marginTop: 3 }}>
-        {typeof value === "number" ? value.toFixed(type === "r2" ? 4 : type === "pct" ? 1 : 0) : value}
-        {type === "pct" && "%"}
-        {type === "wh" && " Wh"}
+        {hasValue ? value.toFixed(type === "r2" ? 4 : type === "pct" ? 1 : 0) : "N/A"}
+        {hasValue && type === "pct" && "%"}
+        {hasValue && type === "wh" && " Wh"}
       </div>
     </div>
   );
@@ -52,16 +53,31 @@ export default function MetricsPage() {
     return <div style={{ color: "#9ca3af", fontFamily: "'IBM Plex Mono', monospace" }}>Loading metrics...</div>;
   }
 
-  const bestR2    = Math.max(...MODELS.map(m => data[m.key].R2));
-  const bestRmse  = Math.min(...MODELS.map(m => data[m.key].RMSE));
-  const bestMae   = Math.min(...MODELS.map(m => data[m.key].MAE));
-  const bestSmape = Math.min(...MODELS.map(m => data[m.key].sMAPE));
+  const activeModels = MODELS.filter(m => data[m.key]?.status === "ok");
+
+  const bestOf = (metric, pick) => {
+    const values = activeModels.map(m => data[m.key]?.[metric]).filter(Number.isFinite);
+    return values.length ? pick(...values) : null;
+  };
+
+  const bestR2    = bestOf("R2", Math.max);
+  const bestRmse  = bestOf("RMSE", Math.min);
+  const bestMae   = bestOf("MAE", Math.min);
+  const bestSmape = bestOf("sMAPE", Math.min);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
 
+      {activeModels.length === 0 && (
+        <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 12,
+          padding: "18px 22px", fontSize: 12, color: "#6b7280",
+          fontFamily: "'IBM Plex Mono', monospace" }}>
+          No evaluated models available.
+        </div>
+      )}
+
       {/* Score cards per model */}
-      {MODELS.map(({ key, label, color }) => {
+      {activeModels.map(({ key, label, color }) => {
         const m = data[key];
         return (
           <div key={key} style={{ background: "#fff", border: "1px solid #e5e7eb",
@@ -96,12 +112,12 @@ export default function MetricsPage() {
           <div style={{ height: 220 }}>
             <Bar
               data={{
-                labels: MODELS.map(m => m.label),
+                labels: activeModels.map(m => m.label),
                 datasets: [{
                   label: "R²",
-                  data: MODELS.map(m => data[m.key].R2),
-                  backgroundColor: MODELS.map(m => m.bg.replace("0.15", "0.82")),
-                  borderColor: MODELS.map(m => m.color),
+                  data: activeModels.map(m => data[m.key].R2),
+                  backgroundColor: activeModels.map(m => m.bg.replace("0.15", "0.82")),
+                  borderColor: activeModels.map(m => m.color),
                   borderWidth: 1.5,
                   borderRadius: 6,
                 }]
@@ -127,12 +143,12 @@ export default function MetricsPage() {
           <div style={{ height: 220 }}>
             <Bar
               data={{
-                labels: MODELS.map(m => m.label),
+                labels: activeModels.map(m => m.label),
                 datasets: [{
                   label: "sMAPE (%)",
-                  data: MODELS.map(m => data[m.key].sMAPE),
-                  backgroundColor: MODELS.map(m => m.bg.replace("0.15", "0.78")),
-                  borderColor: MODELS.map(m => m.color),
+                  data: activeModels.map(m => data[m.key].sMAPE),
+                  backgroundColor: activeModels.map(m => m.bg.replace("0.15", "0.78")),
+                  borderColor: activeModels.map(m => m.color),
                   borderWidth: 1.5,
                   borderRadius: 6,
                 }]
@@ -152,12 +168,12 @@ export default function MetricsPage() {
           <div style={{ height: 220 }}>
             <Bar
               data={{
-                labels: MODELS.map(m => m.label),
+                labels: activeModels.map(m => m.label),
                 datasets: [{
                   label: "RMSE (Wh)",
-                  data: MODELS.map(m => data[m.key].RMSE),
-                  backgroundColor: MODELS.map(m => m.bg.replace("0.15", "0.75")),
-                  borderColor: MODELS.map(m => m.color),
+                  data: activeModels.map(m => data[m.key].RMSE),
+                  backgroundColor: activeModels.map(m => m.bg.replace("0.15", "0.75")),
+                  borderColor: activeModels.map(m => m.color),
                   borderWidth: 1.5,
                   borderRadius: 6,
                 }]
@@ -177,12 +193,12 @@ export default function MetricsPage() {
           <div style={{ height: 220 }}>
             <Bar
               data={{
-                labels: MODELS.map(m => m.label),
+                labels: activeModels.map(m => m.label),
                 datasets: [{
                   label: "MAE (Wh)",
-                  data: MODELS.map(m => data[m.key].MAE),
-                  backgroundColor: MODELS.map(m => m.bg.replace("0.15", "0.75")),
-                  borderColor: MODELS.map(m => m.color),
+                  data: activeModels.map(m => data[m.key].MAE),
+                  backgroundColor: activeModels.map(m => m.bg.replace("0.15", "0.75")),
+                  borderColor: activeModels.map(m => m.color),
                   borderWidth: 1.5,
                   borderRadius: 6,
                 }]
@@ -213,8 +229,16 @@ export default function MetricsPage() {
             </tr>
           </thead>
           <tbody>
-            {MODELS.map(({ key, label, color }) => {
+            {activeModels.map(({ key, label, color }) => {
               const m = data[key];
+              const cell = (metric, digits, suffix = "", best = null) => {
+                const value = m[metric];
+                if (!Number.isFinite(value)) return { v: "N/A", best: false };
+                return {
+                  v: `${value.toFixed(digits)}${suffix}`,
+                  best: best !== null && value === best,
+                };
+              };
               return (
                 <tr key={key} style={{ borderBottom: "1px solid #f3f4f6" }}>
                   <td style={{ padding: "10px 12px", display: "flex", alignItems: "center", gap: 8 }}>
@@ -222,10 +246,10 @@ export default function MetricsPage() {
                     {label}
                   </td>
                   {[
-                    { v: m.R2.toFixed(4),   best: m.R2 === bestR2,    higher: true  },
-                    { v: m.RMSE.toFixed(1), best: m.RMSE === bestRmse, higher: false },
-                    { v: m.MAE.toFixed(1),  best: m.MAE === bestMae,   higher: false },
-                    { v: `${m.sMAPE.toFixed(2)}%`, best: m.sMAPE === bestSmape, higher: false },
+                    cell("R2", 4, "", bestR2),
+                    cell("RMSE", 1, "", bestRmse),
+                    cell("MAE", 1, "", bestMae),
+                    cell("sMAPE", 2, "%", bestSmape),
                   ].map(({ v, best }, ci) => (
                     <td key={ci} style={{
                       padding: "10px 12px", textAlign: "right",
@@ -242,7 +266,7 @@ export default function MetricsPage() {
         </table>
         <div style={{ marginTop: 10, fontSize: 10, color: "#9ca3af",
           fontFamily: "'IBM Plex Sans', sans-serif" }}>
-          ★ Best in category
+          ★ Best in category (ties marked on all tied models)
         </div>
       </div>
     </div>

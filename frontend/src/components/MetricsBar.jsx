@@ -85,9 +85,13 @@ export default function MetricsBar() {
     </div>
   );
 
+  const active = ["lstm", "sarima", "xgboost"].filter(
+    model => data?.[model]?.status === "ok"
+  );
+
   return (
     <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-      {["lstm", "sarima", "xgboost"].map(model => (
+      {active.map(model => (
     <MetricCard key={model} model={model} metrics={data?.[model] ?? null} />
     ))}
     </div>
