@@ -42,7 +42,7 @@ export default function App() {
               <div style={{ fontSize: 13, fontWeight: 700, color: "#111827",
                 fontFamily: "'IBM Plex Mono', monospace", lineHeight: 1.1 }}>ElectriCast</div>
               <div style={{ fontSize: 9, color: "#9ca3af", fontFamily: "'IBM Plex Sans', sans-serif" }}>
-                Smart Home Dataset · Energy Forecasting
+                IIT Bombay Residential Buildings · Energy Forecasting
               </div>
             </div>
           </div>

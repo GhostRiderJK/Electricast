@@ -133,7 +133,7 @@ export default function EDAPage() {
       {/* Dataset Stats */}
       <div>
         <SectionHeader title="Dataset Overview"
-          sub={`${stats?.dataset ?? 'Smart Home Dataset'} · hourly resolution · timezone: UTC`} />
+          sub={`${stats?.dataset ?? 'IIT Bombay Residential Buildings'} · hourly resolution · timezone: IST (Asia/Kolkata)`} />
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))", gap: 8 }}>
           {stats && [
             { label: "Total Hours", value: stats.total_hours.toLocaleString(), unit: "" },
