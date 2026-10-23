@@ -1,0 +1,621 @@
+{
+  "generated_at": "2026-10-23T18:19:18+05:30",
+  "protocol": {
+    "timezone": "Asia/Kolkata",
+    "target": "mean hourly load per reporting stable apartment (Wh)",
+    "forecast": "24 hourly values for every test day",
+    "origin": "00:00 IST of the test day",
+    "information_set": "target observations strictly before the origin; lag baselines use >=24 h lags",
+    "folds": "expanding window with train_start fixed at 2017-05-01; one fold tests Sep-Dec 2017 and one tests May-Jun 2018",
+    "evaluation_mask": "target present and seasonal_naive_24 available",
+    "mase_scale": "mean absolute 24-h seasonal difference over valid training pairs",
+    "best_baseline_selection": "lowest MASE on the all-four-baseline mask when it covers >=50% of evaluation hours (and >=24 h); otherwise on the evaluation mask",
+    "significance": "two-sided Wilcoxon signed-rank on paired absolute errors vs the best baseline; p-values unadjusted; small_sample flags fewer than 10 pairs"
+  },
+  "baselines": [
+    "persistence",
+    "seasonal_naive_24",
+    "same_hour_last_week",
+    "mean_last_4_same_weekdays"
+  ],
+  "baseline_descriptions": {
+    "persistence": "last observed value before the forecast day, held flat for 24 h",
+    "seasonal_naive_24": "value at the same hour on the previous day",
+    "same_hour_last_week": "value at the same hour one week earlier",
+    "mean_last_4_same_weekdays": "mean of the same hour on the previous four same weekdays"
+  },
+  "folds": [
+    {
+      "id": "2017-07",
+      "train": {
+        "start": "2017-05-01 00:00",
+        "end": "2017-06-30 23:00",
+        "hours": 1464,
+        "valid_hours": 1464
+      },
+      "test": {
+        "start": "2017-07-01 00:00",
+        "end": "2017-07-31 23:00",
+        "clock_hours": 744,
+        "target_valid_hours": 744,
+        "eval_hours": 744,
+        "eval_days": 31
+      },
+      "mase_scale": 84.6081,
+      "models": {
+        "persistence": {
+          "status": "ok",
+          "n": 744,
+          "MAE": 119.5606,
+          "RMSE": 155.9105,
+          "WAPE": 32.8122,
+          "MASE": 1.4131,
+          "bias": 62.6255,
+          "R2": -0.735152,
+          "sMAPE": 31.3405
+        },
+        "seasonal_naive_24": {
+          "status": "ok",
+          "n": 744,
+          "MAE": 75.0099,
+          "RMSE": 103.3563,
+          "WAPE": 20.5857,
+          "MASE": 0.8866,
+          "bias": 0.4438,
+          "R2": 0.237463,
+          "sMAPE": 23.0674
+        },
+        "same_hour_last_week": {
+          "status": "ok",
+          "n": 744,
+          "MAE": 94.9954,
+          "RMSE": 129.8369,
+          "WAPE": 26.0705,
+          "MASE": 1.1228,
+          "bias": 10.5916,
+          "R2": -0.203325,
+          "sMAPE": 28.5038
+        },
+        "mean_last_4_same_weekdays": {
+          "status": "ok",
+          "n": 744,
+          "MAE": 86.9434,
+          "RMSE": 114.3965,
+          "WAPE": 23.8607,
+          "MASE": 1.0276,
+          "bias": 30.9603,
+          "R2": 0.065859,
+          "sMAPE": 24.8925
+        }
+      },
+      "best_baseline": "seasonal_naive_24",
+      "selection": {
+        "mask": "all_four_baselines",
+        "hours": 744,
+        "by": "MASE",
+        "metrics": {
+          "persistence": {
+            "status": "ok",
+            "n": 744,
+            "MAE": 119.5606,
+            "RMSE": 155.9105,
+            "WAPE": 32.8122,
+            "MASE": 1.4131,
+            "bias": 62.6255,
+            "R2": -0.735152,
+            "sMAPE": 31.3405
+          },
+          "seasonal_naive_24": {
+            "status": "ok",
+            "n": 744,
+            "MAE": 75.0099,
+            "RMSE": 103.3563,
+            "WAPE": 20.5857,
+            "MASE": 0.8866,
+            "bias": 0.4438,
+            "R2": 0.237463,
+            "sMAPE": 23.0674
+          },
+          "same_hour_last_week": {
+            "status": "ok",
+            "n": 744,
+            "MAE": 94.9954,
+            "RMSE": 129.8369,
+            "WAPE": 26.0705,
+            "MASE": 1.1228,
+            "bias": 10.5916,
+            "R2": -0.203325,
+            "sMAPE": 28.5038
+          },
+          "mean_last_4_same_weekdays": {
+            "status": "ok",
+            "n": 744,
+            "MAE": 86.9434,
+            "RMSE": 114.3965,
+            "WAPE": 23.8607,
+            "MASE": 1.0276,
+            "bias": 30.9603,
+            "R2": 0.065859,
+            "sMAPE": 24.8925
+          }
+        }
+      },
+      "paired_vs_best": {
+        "persistence": {
+          "n_pairs": 744,
+          "median_abs_error_diff_wh": 30.3253,
+          "model_better": false,
+          "small_sample": false,
+          "statistic": 73189.0,
+          "p_value": 8.371327829160441e-23,
+          "significant_at_0.05": true,
+          "reason": null
+        },
+        "same_hour_last_week": {
+          "n_pairs": 744,
+          "median_abs_error_diff_wh": 10.0535,
+          "model_better": false,
+          "small_sample": false,
+          "statistic": 112332.0,
+          "p_value": 7.666464807733864e-06,
+          "significant_at_0.05": true,
+          "reason": null
+        },
+        "mean_last_4_same_weekdays": {
+          "n_pairs": 744,
+          "median_abs_error_diff_wh": 4.7827,
+          "model_better": false,
+          "small_sample": false,
+          "statistic": 121177.0,
+          "p_value": 0.0030172046759843127,
+          "significant_at_0.05": true,
+          "reason": null
+        }
+      }
+    },
+    {
+      "id": "2017-08",
+      "train": {
+        "start": "2017-05-01 00:00",
+        "end": "2017-07-31 23:00",
+        "hours": 2208,
+        "valid_hours": 2208
+      },
+      "test": {
+        "start": "2017-08-01 00:00",
+        "end": "2017-08-31 23:00",
+        "clock_hours": 744,
+        "target_valid_hours": 744,
+        "eval_hours": 744,
+        "eval_days": 31
+      },
+      "mase_scale": 81.3384,
+      "models": {
+        "persistence": {
+          "status": "ok",
+          "n": 744,
+          "MAE": 105.7492,
+          "RMSE": 133.1715,
+          "WAPE": 28.971,
+          "MASE": 1.3001,
+          "bias": 18.2313,
+          "R2": -0.432447,
+          "sMAPE": 28.6326
+        },
+        "seasonal_naive_24": {
+          "status": "ok",
+          "n": 744,
+          "MAE": 76.3144,
+          "RMSE": 101.7654,
+          "WAPE": 20.9071,
+          "MASE": 0.9382,
+          "bias": -0.5212,
+          "R2": 0.163518,
+          "sMAPE": 22.1644
+        },
+        "same_hour_last_week": {
+          "status": "ok",
+          "n": 744,
+          "MAE": 74.5241,
+          "RMSE": 98.5704,
+          "WAPE": 20.4166,
+          "MASE": 0.9162,
+          "bias": -7.5758,
+          "R2": 0.215217,
+          "sMAPE": 21.7639
+        },
+        "mean_last_4_same_weekdays": {
+          "status": "ok",
+          "n": 744,
+          "MAE": 58.926,
+          "RMSE": 78.0977,
+          "WAPE": 16.1433,
+          "MASE": 0.7245,
+          "bias": -8.1135,
+          "R2": 0.507356,
+          "sMAPE": 17.1679
+        }
+      },
+      "best_baseline": "mean_last_4_same_weekdays",
+      "selection": {
+        "mask": "all_four_baselines",
+        "hours": 744,
+        "by": "MASE",
+        "metrics": {
+          "persistence": {
+            "status": "ok",
+            "n": 744,
+            "MAE": 105.7492,
+            "RMSE": 133.1715,
+            "WAPE": 28.971,
+            "MASE": 1.3001,
+            "bias": 18.2313,
+            "R2": -0.432447,
+            "sMAPE": 28.6326
+          },
+          "seasonal_naive_24": {
+            "status": "ok",
+            "n": 744,
+            "MAE": 76.3144,
+            "RMSE": 101.7654,
+            "WAPE": 20.9071,
+            "MASE": 0.9382,
+            "bias": -0.5212,
+            "R2": 0.163518,
+            "sMAPE": 22.1644
+          },
+          "same_hour_last_week": {
+            "status": "ok",
+            "n": 744,
+            "MAE": 74.5241,
+            "RMSE": 98.5704,
+            "WAPE": 20.4166,
+            "MASE": 0.9162,
+            "bias": -7.5758,
+            "R2": 0.215217,
+            "sMAPE": 21.7639
+          },
+          "mean_last_4_same_weekdays": {
+            "status": "ok",
+            "n": 744,
+            "MAE": 58.926,
+            "RMSE": 78.0977,
+            "WAPE": 16.1433,
+            "MASE": 0.7245,
+            "bias": -8.1135,
+            "R2": 0.507356,
+            "sMAPE": 17.1679
+          }
+        }
+      },
+      "paired_vs_best": {
+        "persistence": {
+          "n_pairs": 744,
+          "median_abs_error_diff_wh": 39.8493,
+          "model_better": false,
+          "small_sample": false,
+          "statistic": 61069.0,
+          "p_value": 7.091016467935874e-40,
+          "significant_at_0.05": true,
+          "reason": null
+        },
+        "seasonal_naive_24": {
+          "n_pairs": 744,
+          "median_abs_error_diff_wh": 9.5583,
+          "model_better": false,
+          "small_sample": false,
+          "statistic": 103744.0,
+          "p_value": 2.871502638552003e-09,
+          "significant_at_0.05": true,
+          "reason": null
+        },
+        "same_hour_last_week": {
+          "n_pairs": 744,
+          "median_abs_error_diff_wh": 10.5663,
+          "model_better": false,
+          "small_sample": false,
+          "statistic": 94600.0,
+          "p_value": 6.475883174742504e-14,
+          "significant_at_0.05": true,
+          "reason": null
+        }
+      }
+    },
+    {
+      "id": "2017-09_12",
+      "train": {
+        "start": "2017-05-01 00:00",
+        "end": "2017-08-31 23:00",
+        "hours": 2952,
+        "valid_hours": 2952
+      },
+      "test": {
+        "start": "2017-09-01 00:00",
+        "end": "2017-12-31 23:00",
+        "clock_hours": 2928,
+        "target_valid_hours": 2374,
+        "eval_hours": 2243,
+        "eval_days": 102
+      },
+      "mase_scale": 80.0618,
+      "models": {
+        "persistence": {
+          "status": "ok",
+          "n": 2243,
+          "MAE": 116.2087,
+          "RMSE": 182.0293,
+          "WAPE": 48.4461,
+          "MASE": 1.4515,
+          "bias": 26.7579,
+          "R2": 0.151554,
+          "sMAPE": 50.4008
+        },
+        "seasonal_naive_24": {
+          "status": "ok",
+          "n": 2243,
+          "MAE": 132.1931,
+          "RMSE": 210.407,
+          "WAPE": 55.1098,
+          "MASE": 1.6511,
+          "bias": 3.9894,
+          "R2": -0.133606,
+          "sMAPE": 63.2935
+        },
+        "same_hour_last_week": {
+          "status": "ok",
+          "n": 1927,
+          "MAE": 202.7785,
+          "RMSE": 267.2042,
+          "WAPE": 85.9778,
+          "MASE": 2.5328,
+          "bias": 24.7149,
+          "R2": -0.773357,
+          "sMAPE": 98.2887
+        },
+        "mean_last_4_same_weekdays": {
+          "status": "ok",
+          "n": 1290,
+          "MAE": 167.5681,
+          "RMSE": 203.4163,
+          "WAPE": 85.0518,
+          "MASE": 2.093,
+          "bias": 57.7159,
+          "R2": -0.082931,
+          "sMAPE": 100.3306
+        }
+      },
+      "best_baseline": "persistence",
+      "selection": {
+        "mask": "all_four_baselines",
+        "hours": 1290,
+        "by": "MASE",
+        "metrics": {
+          "persistence": {
+            "status": "ok",
+            "n": 1290,
+            "MAE": 103.4397,
+            "RMSE": 176.2235,
+            "WAPE": 52.5025,
+            "MASE": 1.292,
+            "bias": 10.8806,
+            "R2": 0.18725,
+            "sMAPE": 50.9706
+          },
+          "seasonal_naive_24": {
+            "status": "ok",
+            "n": 1290,
+            "MAE": 135.2254,
+            "RMSE": 221.0268,
+            "WAPE": 68.6358,
+            "MASE": 1.689,
+            "bias": -6.3237,
+            "R2": -0.278555,
+            "sMAPE": 70.6002
+          },
+          "same_hour_last_week": {
+            "status": "ok",
+            "n": 1290,
+            "MAE": 207.3994,
+            "RMSE": 276.738,
+            "WAPE": 105.2689,
+            "MASE": 2.5905,
+            "bias": 31.2271,
+            "R2": -1.00432,
+            "sMAPE": 106.4668
+          },
+          "mean_last_4_same_weekdays": {
+            "status": "ok",
+            "n": 1290,
+            "MAE": 167.5681,
+            "RMSE": 203.4163,
+            "WAPE": 85.0518,
+            "MASE": 2.093,
+            "bias": 57.7159,
+            "R2": -0.082931,
+            "sMAPE": 100.3306
+          }
+        }
+      },
+      "paired_vs_best": {
+        "seasonal_naive_24": {
+          "n_pairs": 2243,
+          "median_abs_error_diff_wh": -0.9011,
+          "model_better": true,
+          "small_sample": false,
+          "statistic": 1131225.0,
+          "p_value": 0.4068388095298764,
+          "significant_at_0.05": false,
+          "reason": null
+        },
+        "same_hour_last_week": {
+          "n_pairs": 1927,
+          "median_abs_error_diff_wh": 42.295,
+          "model_better": false,
+          "small_sample": false,
+          "statistic": 559281.0,
+          "p_value": 1.0751447200812017e-51,
+          "significant_at_0.05": true,
+          "reason": null
+        },
+        "mean_last_4_same_weekdays": {
+          "n_pairs": 1290,
+          "median_abs_error_diff_wh": 74.8665,
+          "model_better": false,
+          "small_sample": false,
+          "statistic": 249603.0,
+          "p_value": 1.2394368135468965e-35,
+          "significant_at_0.05": true,
+          "reason": null
+        }
+      }
+    },
+    {
+      "id": "2018-05_06",
+      "train": {
+        "start": "2017-05-01 00:00",
+        "end": "2017-12-31 23:00",
+        "hours": 5880,
+        "valid_hours": 5326
+      },
+      "test": {
+        "start": "2018-05-01 00:00",
+        "end": "2018-06-04 23:00",
+        "clock_hours": 840,
+        "target_valid_hours": 214,
+        "eval_hours": 182,
+        "eval_days": 8
+      },
+      "mase_scale": 102.6746,
+      "models": {
+        "persistence": {
+          "status": "ok",
+          "n": 182,
+          "MAE": 274.6098,
+          "RMSE": 335.8479,
+          "WAPE": 58.5318,
+          "MASE": 2.6746,
+          "bias": 185.1153,
+          "R2": -2.649963,
+          "sMAPE": 51.7993
+        },
+        "seasonal_naive_24": {
+          "status": "ok",
+          "n": 182,
+          "MAE": 132.8744,
+          "RMSE": 192.2697,
+          "WAPE": 28.3216,
+          "MASE": 1.2941,
+          "bias": -67.3032,
+          "R2": -0.196259,
+          "sMAPE": 40.5301
+        },
+        "same_hour_last_week": {
+          "status": "ok",
+          "n": 38,
+          "MAE": 384.2748,
+          "RMSE": 449.7327,
+          "WAPE": 71.8087,
+          "MASE": 3.7426,
+          "bias": -328.4363,
+          "R2": -2.639582,
+          "sMAPE": 126.9862
+        },
+        "mean_last_4_same_weekdays": {
+          "status": "no_data",
+          "n": 0,
+          "MAE": null,
+          "RMSE": null,
+          "WAPE": null,
+          "MASE": null,
+          "bias": null,
+          "R2": null,
+          "sMAPE": null
+        }
+      },
+      "best_baseline": "seasonal_naive_24",
+      "selection": {
+        "mask": "evaluation_mask",
+        "hours": 182,
+        "by": "MASE",
+        "metrics": {
+          "persistence": {
+            "status": "ok",
+            "n": 182,
+            "MAE": 274.6098,
+            "RMSE": 335.8479,
+            "WAPE": 58.5318,
+            "MASE": 2.6746,
+            "bias": 185.1153,
+            "R2": -2.649963,
+            "sMAPE": 51.7993
+          },
+          "seasonal_naive_24": {
+            "status": "ok",
+            "n": 182,
+            "MAE": 132.8744,
+            "RMSE": 192.2697,
+            "WAPE": 28.3216,
+            "MASE": 1.2941,
+            "bias": -67.3032,
+            "R2": -0.196259,
+            "sMAPE": 40.5301
+          },
+          "same_hour_last_week": {
+            "status": "ok",
+            "n": 38,
+            "MAE": 384.2748,
+            "RMSE": 449.7327,
+            "WAPE": 71.8087,
+            "MASE": 3.7426,
+            "bias": -328.4363,
+            "R2": -2.639582,
+            "sMAPE": 126.9862
+          },
+          "mean_last_4_same_weekdays": {
+            "status": "no_data",
+            "n": 0,
+            "MAE": null,
+            "RMSE": null,
+            "WAPE": null,
+            "MASE": null,
+            "bias": null,
+            "R2": null,
+            "sMAPE": null
+          }
+        }
+      },
+      "paired_vs_best": {
+        "persistence": {
+          "n_pairs": 182,
+          "median_abs_error_diff_wh": 126.5785,
+          "model_better": false,
+          "small_sample": false,
+          "statistic": 2768.0,
+          "p_value": 2.0041622746244334e-13,
+          "significant_at_0.05": true,
+          "reason": null
+        },
+        "same_hour_last_week": {
+          "n_pairs": 38,
+          "median_abs_error_diff_wh": 288.4959,
+          "model_better": false,
+          "small_sample": false,
+          "statistic": 38.0,
+          "p_value": 4.803587216883898e-08,
+          "significant_at_0.05": true,
+          "reason": null
+        },
+        "mean_last_4_same_weekdays": {
+          "n_pairs": 0,
+          "median_abs_error_diff_wh": null,
+          "model_better": null,
+          "small_sample": true,
+          "statistic": null,
+          "p_value": null,
+          "significant_at_0.05": null,
+          "reason": "no paired hours"
+        }
+      }
+    }
+  ]
+}

@@ -140,6 +140,14 @@ One entry per iteration: date, item id, change, evidence, numbers.
 - Added `FOLDS`, `PROTOCOL`, `evaluate_fold()` and `run_backtest()`: four expanding folds with train_start fixed at 2017-05-01 — test Jul 2017, Aug 2017, Sep–Dec 2017, and May–Jun 2018. Forecast origin is 00:00 IST each test day; the evaluation mask requires a target and a seasonal-naive-24 forecast, so all models share the same hours within a fold.
 - Evidence: eval hours are 744 / 744 / 2,243 / 182; target-valid hours are 744 / 744 / 2,374 / 214. Best baseline by MAE is seasonal naive in Jul (75.01), mean-of-4 in Aug (58.93), persistence in Sep–Dec (116.21) and seasonal naive in May–Jun (132.87). Replacing every value from a test day's origin onward with 1e9 leaves that day's forecasts unchanged for all four baselines (6 sample days); fold boundaries satisfy train_end < test_start and expand monotonically.
 
+## 2026-10-23 — 3.4 Fold results and paired significance
+
+- Extended the backtest to write `backend/results.json`: per fold the train/test windows, MASE scale, all four baseline metrics on the shared evaluation mask, the best baseline, the selection mask and its metrics, and a paired Wilcoxon test of every other baseline against the best one.
+- Best baseline by MASE: seasonal naive in Jul 2017 (0.887), mean-of-four-weekdays in Aug 2017 (0.725), persistence in Sep–Dec 2017 (1.292 on the 1,290-h four-baseline mask), seasonal naive in May–Jun 2018 (1.294). The four-week mean has no usable 2018 hours (all four same-weekday lags fall in the coverage gap), so it is reported as `status: no_data` with null metrics rather than omitted.
+- Paired tests: Jul — best beats all three others (p ≤ 0.0031); Aug — p ≤ 2.9e-9; Sep–Dec — seasonal naive's median absolute error is 0.90 Wh lower than persistence but not significant (n = 2,243, p = 0.4068), while the other two are significantly worse; May–Jun — best beats persistence (n = 182, p = 2.0e-13) and last-week (n = 38, p = 4.8e-8).
+- Edge cases verified: identical predictions → `n_pairs=30`, `reason="all paired differences are zero"`; a model with a uniform 0.5-Wh-lower absolute error over 30 pairs → `model_better=True`, p = 4.3e-8; 5 pairs → `small_sample=True`; disjoint indexes → `n_pairs=0`, `reason="no paired hours"`. A schema assertion checks all four fold ids, the nine metric keys per model, the paired keys, and that every float in the file is finite.
+- Wrote `CHECKPOINT_EVAL.md` with the protocol, fold table, selection rules, and limitations.
+
 
 
 

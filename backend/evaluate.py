@@ -5,10 +5,16 @@ before 00:00 IST of that day. Run from the repo root:
 
     python backend/evaluate.py
 """
+import json
+import os
+
 import numpy as np
 import pandas as pd
+from scipy.stats import wilcoxon
 
 import data_pipeline as dp
+
+RESULTS_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "results.json")
 
 BASELINES = (
     "persistence",
@@ -64,6 +70,8 @@ PROTOCOL = {
     "folds": "expanding window with train_start fixed at 2017-05-01; one fold tests Sep-Dec 2017 and one tests May-Jun 2018",
     "evaluation_mask": "target present and seasonal_naive_24 available",
     "mase_scale": "mean absolute 24-h seasonal difference over valid training pairs",
+    "best_baseline_selection": "lowest MASE on the all-four-baseline mask when it covers >=50% of evaluation hours (and >=24 h); otherwise on the evaluation mask",
+    "significance": "two-sided Wilcoxon signed-rank on paired absolute errors vs the best baseline; p-values unadjusted; small_sample flags fewer than 10 pairs",
 }
 
 
@@ -145,6 +153,84 @@ def compute_metrics(actual, pred, scale=None):
     }
 
 
+def paired_significance(actual, pred, baseline_pred):
+    """Two-sided Wilcoxon signed-rank test on paired absolute errors."""
+    frame = pd.concat(
+        [
+            pd.Series(actual).rename("actual"),
+            pd.Series(pred).rename("pred"),
+            pd.Series(baseline_pred).rename("baseline"),
+        ],
+        axis=1,
+    ).dropna()
+    if frame.empty:
+        return {
+            "n_pairs": 0, "median_abs_error_diff_wh": None, "model_better": None,
+            "small_sample": True, "statistic": None, "p_value": None,
+            "significant_at_0.05": None, "reason": "no paired hours",
+        }
+
+    model_ae = (frame["pred"] - frame["actual"]).abs()
+    base_ae = (frame["baseline"] - frame["actual"]).abs()
+    diff = model_ae - base_ae
+    median_diff = float(diff.median())
+
+    result = {
+        "n_pairs": int(len(diff)),
+        "median_abs_error_diff_wh": _clean(median_diff, 4),
+        "model_better": bool(median_diff < 0) if median_diff != 0 else None,
+        "small_sample": bool(len(diff) < 10),
+        "statistic": None,
+        "p_value": None,
+        "significant_at_0.05": None,
+        "reason": None,
+    }
+    if bool((diff == 0).all()):
+        result["reason"] = "all paired differences are zero"
+        return result
+
+    try:
+        statistic, p_value = wilcoxon(
+            diff.to_numpy(dtype=float), zero_method="wilcox", alternative="two-sided"
+        )
+        result["statistic"] = _clean(statistic, 4)
+        result["p_value"] = float(p_value) if np.isfinite(p_value) else None
+        result["significant_at_0.05"] = (
+            bool(result["p_value"] < 0.05) if result["p_value"] is not None else None
+        )
+    except ValueError as exc:
+        result["reason"] = str(exc)
+    return result
+
+
+def select_best_baseline(actual, preds, eval_mask, scale):
+    """Pick the baseline with the lowest MASE on a common mask.
+
+    The all-four-baseline mask is used when it covers at least half of the
+    evaluation hours (and at least 24 h); otherwise the evaluation mask is used
+    and baselines that lack the longer lags report fewer hours.
+    """
+    all_four = eval_mask.copy()
+    for name in BASELINES:
+        all_four &= preds[name].notna()
+
+    if int(all_four.sum()) >= max(24, 0.5 * int(eval_mask.sum())):
+        mask_name, mask = "all_four_baselines", all_four
+    else:
+        mask_name, mask = "evaluation_mask", eval_mask
+
+    selection_metrics = {}
+    scores = {}
+    for name in BASELINES:
+        metrics = compute_metrics(actual[mask], preds[name][mask], scale)
+        selection_metrics[name] = metrics
+        if metrics["status"] == "ok" and metrics["MASE"] is not None:
+            scores[name] = (metrics["MASE"], metrics["MAE"], name)
+
+    best = min(scores, key=lambda name: scores[name][:2]) if scores else None
+    return best, mask_name, int(mask.sum()), selection_metrics
+
+
 def evaluate_fold(series, fold):
     """Score all baselines on one day-ahead fold.
 
@@ -160,6 +246,21 @@ def evaluate_fold(series, fold):
     models = {}
     for name in BASELINES:
         models[name] = compute_metrics(actual[mask], preds[name][mask], scale)
+
+    best, selection_mask, selection_hours, selection_metrics = select_best_baseline(
+        actual, preds, mask, scale
+    )
+    paired = {}
+    for name in BASELINES:
+        if name == best:
+            continue
+        paired[name] = paired_significance(
+            actual[mask], preds[name][mask], preds[best][mask]
+        ) if best else {
+            "n_pairs": 0, "median_abs_error_diff_wh": None, "model_better": None,
+            "small_sample": True, "statistic": None, "p_value": None,
+            "significant_at_0.05": None, "reason": "no best baseline",
+        }
 
     return {
         "id": fold["id"],
@@ -179,11 +280,31 @@ def evaluate_fold(series, fold):
         },
         "mase_scale": _clean(scale, 4),
         "models": models,
+        "best_baseline": best,
+        "selection": {
+            "mask": selection_mask,
+            "hours": selection_hours,
+            "by": "MASE",
+            "metrics": selection_metrics,
+        },
+        "paired_vs_best": paired,
     }
 
 
 def run_backtest(series):
     return [evaluate_fold(series, fold) for fold in FOLDS]
+
+
+def build_results(series=None):
+    if series is None:
+        series = load_target()
+    return {
+        "generated_at": pd.Timestamp.now(tz=dp.TZ).isoformat(timespec="seconds"),
+        "protocol": dict(PROTOCOL),
+        "baselines": list(BASELINES),
+        "baseline_descriptions": dict(BASELINE_DESCRIPTIONS),
+        "folds": run_backtest(series),
+    }
 
 
 def baseline_forecasts(series, start, end):
@@ -222,9 +343,13 @@ def _show(value, digits=2):
 
 
 def main():
-    series = load_target()
+    results = build_results()
+    with open(RESULTS_PATH, "w", encoding="utf-8") as f:
+        json.dump(results, f, indent=2, ensure_ascii=False, allow_nan=False)
+        f.write("\n")
+    print(f"Wrote {RESULTS_PATH}")
     print(f"Day-ahead backtest, {len(FOLDS)} expanding folds, origin 00:00 IST")
-    for fold in run_backtest(series):
+    for fold in results["folds"]:
         test = fold["test"]
         print(f"\n== {fold['id']}: train {fold['train']['hours']} h "
               f"({fold['train']['valid_hours']} valid), test {test['clock_hours']} h "
@@ -238,6 +363,14 @@ def main():
                   f"{_show(m['WAPE']):>8s} {_show(m['MASE'], 3):>7s} "
                   f"{_show(m['bias']):>8s} {_show(m['R2'], 4):>8s} "
                   f"{_show(m['sMAPE']):>8s}")
+        selection = fold["selection"]
+        print(f"best baseline: {fold['best_baseline']} "
+              f"({selection['mask']}, {selection['hours']} h, by {selection['by']})")
+        for name, comp in fold["paired_vs_best"].items():
+            p_value = comp["p_value"] if comp["p_value"] is not None else comp["reason"]
+            print(f"  {name:28s} n={comp['n_pairs']:5d} "
+                  f"median_diff={_show(comp['median_abs_error_diff_wh'])} Wh "
+                  f"p={p_value}")
 
 
 if __name__ == "__main__":
