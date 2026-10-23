@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-23T18:26:43+05:30",
+  "generated_at": "2026-10-23T18:29:01+05:30",
   "protocol": {
     "timezone": "Asia/Kolkata",
     "target": "mean hourly load per reporting stable apartment (Wh)",
@@ -11,7 +11,7 @@
     "mase_scale": "mean absolute 24-h seasonal difference over valid training pairs",
     "best_baseline_selection": "lowest MASE on the all-four-baseline mask when it covers >=50% of evaluation hours (and >=24 h); otherwise on the evaluation mask",
     "significance": "two-sided Wilcoxon signed-rank on paired absolute errors vs the best baseline; p-values unadjusted; small_sample flags fewer than 10 pairs",
-    "learned_models": "fit on the fold's training window labels only; features at target hour t use observations at t-lag with lag >= 24 h, so all features predate the day's 00:00 IST origin; reporting counts are lagged >=24 h; calendar/holiday/semester flags are known in advance; labels clipped at a train-only Q3+3*IQR cap"
+    "learned_models": "fit on the fold's training window labels only; features at target hour t use observations at t-lag with lag >= 24 h, so all features predate the day's 00:00 IST origin; reporting counts and weather are lagged >=24 h; calendar/holiday/semester flags are known in advance; labels clipped at a train-only Q3+3*IQR cap"
   },
   "baselines": [
     "persistence",
@@ -29,7 +29,34 @@
     "xgboost"
   ],
   "learned_model_descriptions": {
-    "xgboost": "pooled direct day-ahead gradient-boosted trees on lags of 24-47, 168 and 336 h, calendar/holiday/semester flags, hour of day, and lagged reporting counts; trained only on the fold's training labels, clipped at the train-only outlier cap"
+    "xgboost": "pooled direct day-ahead gradient-boosted trees on lags of 24-47, 168 and 336 h, calendar/holiday/semester flags, hour of day, lagged reporting counts, and lagged Mumbai weather; trained only on the fold's training labels, clipped at the train-only outlier cap"
+  },
+  "weather": {
+    "available": true,
+    "cache": "weather_mumbai.csv",
+    "source": "https://archive-api.open-meteo.com/v1/archive",
+    "latitude": 19.1334,
+    "longitude": 72.9133,
+    "start": "2017-03-01 00:00:00+05:30",
+    "end": "2018-06-30 23:00:00+05:30",
+    "hours": 11688,
+    "variables": [
+      "temperature_2m",
+      "relative_humidity_2m",
+      "apparent_temperature",
+      "precipitation",
+      "cloud_cover",
+      "wind_speed_10m"
+    ],
+    "missing_values": {
+      "temperature_2m": 0,
+      "relative_humidity_2m": 0,
+      "apparent_temperature": 0,
+      "precipitation": 0,
+      "cloud_cover": 0,
+      "wind_speed_10m": 0
+    },
+    "information_set": "weather lags >= 24 h only; no target-hour weather"
   },
   "folds": [
     {
@@ -97,13 +124,13 @@
         "xgboost": {
           "status": "ok",
           "n": 744,
-          "MAE": 66.4561,
-          "RMSE": 87.7973,
-          "WAPE": 18.2382,
-          "MASE": 0.7855,
-          "bias": 4.6953,
-          "R2": 0.449763,
-          "sMAPE": 20.0381
+          "MAE": 65.6931,
+          "RMSE": 87.2063,
+          "WAPE": 18.0288,
+          "MASE": 0.7764,
+          "bias": 3.4205,
+          "R2": 0.457146,
+          "sMAPE": 19.8269
         }
       },
       "model_fit": {
@@ -165,7 +192,15 @@
             "is_holiday",
             "semester_in_session",
             "n_reporting_lag_24",
-            "n_reporting_lag24_47_mean"
+            "n_reporting_lag24_47_mean",
+            "weather_temperature_2m_lag_24",
+            "weather_relative_humidity_2m_lag_24",
+            "weather_apparent_temperature_lag_24",
+            "weather_precipitation_lag_24",
+            "weather_cloud_cover_lag_24",
+            "weather_wind_speed_10m_lag_24",
+            "weather_temp_lag24_47_mean",
+            "weather_precip_lag24_47_sum"
           ]
         }
       },
@@ -254,11 +289,11 @@
         },
         "xgboost": {
           "n_pairs": 744,
-          "median_abs_error_diff_wh": -6.1149,
+          "median_abs_error_diff_wh": -7.5855,
           "model_better": true,
           "small_sample": false,
-          "statistic": 118466.0,
-          "p_value": 0.0006074211284652995,
+          "statistic": 114944.0,
+          "p_value": 5.6044242148867514e-05,
           "significant_at_0.05": true,
           "reason": null
         }
@@ -329,13 +364,13 @@
         "xgboost": {
           "status": "ok",
           "n": 744,
-          "MAE": 61.5473,
-          "RMSE": 81.434,
-          "WAPE": 16.8615,
-          "MASE": 0.7567,
-          "bias": -19.0152,
-          "R2": 0.464366,
-          "sMAPE": 17.8002
+          "MAE": 62.2384,
+          "RMSE": 82.4992,
+          "WAPE": 17.0508,
+          "MASE": 0.7652,
+          "bias": -20.663,
+          "R2": 0.450262,
+          "sMAPE": 18.0545
         }
       },
       "model_fit": {
@@ -397,7 +432,15 @@
             "is_holiday",
             "semester_in_session",
             "n_reporting_lag_24",
-            "n_reporting_lag24_47_mean"
+            "n_reporting_lag24_47_mean",
+            "weather_temperature_2m_lag_24",
+            "weather_relative_humidity_2m_lag_24",
+            "weather_apparent_temperature_lag_24",
+            "weather_precipitation_lag_24",
+            "weather_cloud_cover_lag_24",
+            "weather_wind_speed_10m_lag_24",
+            "weather_temp_lag24_47_mean",
+            "weather_precip_lag24_47_sum"
           ]
         }
       },
@@ -486,11 +529,11 @@
         },
         "xgboost": {
           "n_pairs": 744,
-          "median_abs_error_diff_wh": -0.9722,
-          "model_better": true,
+          "median_abs_error_diff_wh": 2.0847,
+          "model_better": false,
           "small_sample": false,
-          "statistic": 133658.0,
-          "p_value": 0.4022387524133658,
+          "statistic": 129066.0,
+          "p_value": 0.10508402481705559,
           "significant_at_0.05": false,
           "reason": null
         }
@@ -561,13 +604,13 @@
         "xgboost": {
           "status": "ok",
           "n": 2243,
-          "MAE": 163.2192,
-          "RMSE": 208.6262,
-          "WAPE": 68.0442,
-          "MASE": 2.0387,
-          "bias": 102.2706,
-          "R2": -0.114499,
-          "sMAPE": 79.3463
+          "MAE": 170.4015,
+          "RMSE": 217.8272,
+          "WAPE": 71.0384,
+          "MASE": 2.1284,
+          "bias": 117.7232,
+          "R2": -0.214972,
+          "sMAPE": 79.7515
         }
       },
       "model_fit": {
@@ -629,7 +672,15 @@
             "is_holiday",
             "semester_in_session",
             "n_reporting_lag_24",
-            "n_reporting_lag24_47_mean"
+            "n_reporting_lag24_47_mean",
+            "weather_temperature_2m_lag_24",
+            "weather_relative_humidity_2m_lag_24",
+            "weather_apparent_temperature_lag_24",
+            "weather_precipitation_lag_24",
+            "weather_cloud_cover_lag_24",
+            "weather_wind_speed_10m_lag_24",
+            "weather_temp_lag24_47_mean",
+            "weather_precip_lag24_47_sum"
           ]
         }
       },
@@ -718,11 +769,11 @@
         },
         "xgboost": {
           "n_pairs": 2243,
-          "median_abs_error_diff_wh": 12.1197,
+          "median_abs_error_diff_wh": 15.2167,
           "model_better": false,
           "small_sample": false,
-          "statistic": 973378.0,
-          "p_value": 1.5594504267700508e-20,
+          "statistic": 950894.0,
+          "p_value": 1.222379837906845e-23,
           "significant_at_0.05": true,
           "reason": null
         }
@@ -793,13 +844,13 @@
         "xgboost": {
           "status": "ok",
           "n": 182,
-          "MAE": 100.398,
-          "RMSE": 136.1497,
-          "WAPE": 21.3994,
-          "MASE": 0.9778,
-          "bias": -58.3891,
-          "R2": 0.400158,
-          "sMAPE": 22.652
+          "MAE": 106.471,
+          "RMSE": 143.3002,
+          "WAPE": 22.6938,
+          "MASE": 1.037,
+          "bias": -67.2666,
+          "R2": 0.335497,
+          "sMAPE": 23.8708
         }
       },
       "model_fit": {
@@ -861,7 +912,15 @@
             "is_holiday",
             "semester_in_session",
             "n_reporting_lag_24",
-            "n_reporting_lag24_47_mean"
+            "n_reporting_lag24_47_mean",
+            "weather_temperature_2m_lag_24",
+            "weather_relative_humidity_2m_lag_24",
+            "weather_apparent_temperature_lag_24",
+            "weather_precipitation_lag_24",
+            "weather_cloud_cover_lag_24",
+            "weather_wind_speed_10m_lag_24",
+            "weather_temp_lag24_47_mean",
+            "weather_precip_lag24_47_sum"
           ]
         }
       },
@@ -950,12 +1009,12 @@
         },
         "xgboost": {
           "n_pairs": 182,
-          "median_abs_error_diff_wh": -11.9493,
+          "median_abs_error_diff_wh": -2.3319,
           "model_better": true,
           "small_sample": false,
-          "statistic": 6706.0,
-          "p_value": 0.022791249686424337,
-          "significant_at_0.05": true,
+          "statistic": 7515.0,
+          "p_value": 0.2541970416739031,
+          "significant_at_0.05": false,
           "reason": null
         }
       }

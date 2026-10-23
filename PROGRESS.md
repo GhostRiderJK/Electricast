@@ -162,6 +162,13 @@ One entry per iteration: date, item id, change, evidence, numbers.
 - Leakage tests grew to 8: reporting features and XGBoost predictions stay unchanged when reporting counts from the forecast day are replaced, and holiday/weekend/semester flags land on the expected dates. `python -m pytest backend/tests -q` → 8 passed.
 - Backtest: MAE 66.46 Jul (was 65.95; still beats seasonal 75.01, p = 6.1e-04), 61.55 Aug (was 62.35; 2.6 Wh behind mean-of-4, p = 0.402), 163.22 Sep–Dec (was 151.01; 47 Wh behind persistence, p = 1.6e-20), 100.40 May–Jun (was 142.59; now beats seasonal 132.87, p = 0.023). Calendar features help the year-later fold and hurt the unseen-autumn fold. The feature set is frozen here; any tuning happens on train-side CV in 4.4, not on these test folds.
 
+## 2026-10-23 — 4.3 Open-Meteo weather features
+
+- Added `backend/weather.py` and committed `backend/weather_mumbai.csv`: 11,688 IST hours from 2017-03-01 to 2018-06-30, six variables (temperature, relative humidity, apparent temperature, precipitation, cloud cover, wind), zero missing values, for IIT Bombay (19.1334 N, 72.9133 E) per the dataset provenance. Fetching is explicit (`python backend/weather.py`); `evaluate.py` reads only the cache, so backtests run offline.
+- Weather enters the model only as lags ≥24 h: six same-hour-previous-day values, the 24–47 h mean temperature, and the 24–47 h precipitation sum. Target-hour weather would not be known at the day-ahead origin, so it is never used.
+- Leakage tests grew to 10: weather feature frames and XGBoost predictions stay unchanged when weather from the forecast day is replaced. `python -m pytest backend/tests -q` → 10 passed.
+- Backtest: MAE 65.69 Jul (best baseline 75.01, p = 5.6e-05), 62.24 Aug (mean-of-4 58.93, p = 0.105), 170.40 Sep–Dec (persistence 116.21, p = 1.2e-23), 106.47 May–Jun (seasonal 132.87, p = 0.254). Weather slightly helps July and hurts Sep–Dec; features stay in place and 4.4 tunes only on train-side CV.
+
 
 
 

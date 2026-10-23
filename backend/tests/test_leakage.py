@@ -37,6 +37,18 @@ def synthetic_reporting(series):
     return pd.Series(24, index=series.index, name="n_reporting")
 
 
+def synthetic_weather(series):
+    index = series.index
+    return pd.DataFrame({
+        "temperature_2m": 25.0 + 5.0 * np.sin(2 * np.pi * index.hour / 24),
+        "relative_humidity_2m": 60.0 + 10.0 * np.cos(2 * np.pi * index.hour / 24),
+        "apparent_temperature": 27.0 + 5.0 * np.sin(2 * np.pi * index.hour / 24),
+        "precipitation": 0.0,
+        "cloud_cover": 40.0,
+        "wind_speed_10m": 12.0,
+    }, index=index)
+
+
 def with_future_replaced(series, start):
     mutated = series.copy()
     mutated.loc[start:] = 1e9
@@ -97,6 +109,30 @@ def test_xgboost_does_not_read_future_reporting_counts():
     mutated = reporting.copy()
     mutated.loc[TEST_DAY:] = 0
     after, _ = fm.forecast(*args, params=params, reporting=mutated)
+    np.testing.assert_allclose(before.to_numpy(), after.to_numpy())
+
+
+def test_weather_features_do_not_read_forecast_day_values():
+    series = synthetic_series()
+    weather = synthetic_weather(series)
+    before = fm.make_features(series, TEST_HOURS, weather=weather)
+    mutated = weather.copy()
+    mutated.loc[TEST_DAY:] = 999.0
+    after = fm.make_features(series, TEST_HOURS, weather=mutated)
+    pd.testing.assert_frame_equal(before, after)
+    assert before["weather_temperature_2m_lag_24"].notna().all()
+
+
+def test_xgboost_does_not_read_future_weather():
+    series = synthetic_series()
+    weather = synthetic_weather(series)
+    params = {"n_estimators": 30, "max_depth": 2, "learning_rate": 0.1, "n_jobs": 1}
+    args = (series, series.index[0], series.index[20 * 24 - 1],
+            TEST_DAY, TEST_HOURS[-1])
+    before, _ = fm.forecast(*args, params=params, weather=weather)
+    mutated = weather.copy()
+    mutated.loc[TEST_DAY:] = 999.0
+    after, _ = fm.forecast(*args, params=params, weather=mutated)
     np.testing.assert_allclose(before.to_numpy(), after.to_numpy())
 
 

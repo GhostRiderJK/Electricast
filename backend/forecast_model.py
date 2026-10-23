@@ -43,12 +43,12 @@ DEFAULT_PARAMS = {
 }
 
 
-def make_features(series, hours, reporting=None):
-    """Build lag and calendar features for the given target hours.
+def make_features(series, hours, reporting=None, weather=None):
+    """Build lag, calendar and weather features for the given target hours.
 
-    `hours` must be tz-aware IST timestamps. Reporting counts, when supplied,
-    are also lagged by at least 24 h so they cannot reveal the forecast day.
-    Missing history stays NaN; XGBoost handles it natively.
+    `hours` must be tz-aware IST timestamps. Reporting counts and weather, when
+    supplied, are lagged by at least 24 h so they cannot reveal the forecast
+    day. Missing history stays NaN; XGBoost handles it natively.
     """
     hours = pd.DatetimeIndex(hours)
     block = {}
@@ -87,6 +87,27 @@ def make_features(series, hours, reporting=None):
             for lag in range(24, 48)
         })
         block["n_reporting_lag24_47_mean"] = counts.mean(axis=1).to_numpy()
+
+    if weather is not None:
+        for name in weather.columns:
+            block[f"weather_{name}_lag_24"] = weather[name].reindex(
+                hours - pd.Timedelta(hours=24)
+            ).to_numpy(dtype=float)
+        lagged = {
+            name: pd.DataFrame({
+                lag: weather[name].reindex(
+                    hours - pd.Timedelta(hours=lag)
+                ).to_numpy(dtype=float)
+                for lag in range(24, 48)
+            })
+            for name in ("temperature_2m", "precipitation")
+        }
+        block["weather_temp_lag24_47_mean"] = lagged["temperature_2m"].mean(
+            axis=1
+        ).to_numpy()
+        block["weather_precip_lag24_47_sum"] = lagged["precipitation"].sum(
+            axis=1, min_count=1
+        ).to_numpy()
     return pd.DataFrame(block, index=hours)
 
 
@@ -94,7 +115,8 @@ def _hour_range(start, end):
     return pd.date_range(start, end, freq="h", tz=dp.TZ)
 
 
-def fit(series, train_start, train_end, params=None, reporting=None):
+def fit(series, train_start, train_end, params=None, reporting=None,
+        weather=None):
     """Fit one pooled model on the training window.
 
     Labels are clipped with the train-only Q3 + 3*IQR cap before fitting; the
@@ -102,7 +124,7 @@ def fit(series, train_start, train_end, params=None, reporting=None):
     24-h lag are dropped.
     """
     hours = _hour_range(train_start, train_end)
-    features = make_features(series, hours, reporting=reporting)
+    features = make_features(series, hours, reporting=reporting, weather=weather)
     labels = series.reindex(hours).astype(float)
     keep = labels.notna() & features["lag_24"].notna()
     features = features.loc[keep]
@@ -132,20 +154,23 @@ def fit(series, train_start, train_end, params=None, reporting=None):
     return model, metadata
 
 
-def predict(series, model, start, end, reporting=None):
+def predict(series, model, start, end, reporting=None, weather=None):
     """Predict every hour in [start, end]; negative loads are clipped to zero."""
     hours = _hour_range(start, end)
-    features = make_features(series, hours, reporting=reporting)
+    features = make_features(
+        series, hours, reporting=reporting, weather=weather
+    )
     values = model.predict(features).astype(float)
     return pd.Series(np.maximum(values, 0.0), index=hours, name="xgboost")
 
 
 def forecast(series, train_start, train_end, test_start, test_end, params=None,
-             reporting=None):
+             reporting=None, weather=None):
     """Fit on the training window and forecast the test window."""
     model, metadata = fit(
-        series, train_start, train_end, params=params, reporting=reporting
+        series, train_start, train_end, params=params, reporting=reporting,
+        weather=weather,
     )
     return predict(
-        series, model, test_start, test_end, reporting=reporting
+        series, model, test_start, test_end, reporting=reporting, weather=weather
     ), metadata
