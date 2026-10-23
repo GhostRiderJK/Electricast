@@ -1,0 +1,60 @@
+# ElectriCast improvement plan
+Rules: one task per iteration. Tick [x] only after the VERIFY step passes.
+
+## Phase 0 — Hygiene
+- [x] 0.1 Root .gitignore; git rm --cached node_modules, .DS_Store, dist, __pycache__
+- [ ] 0.2 Pin requirements.txt to installed versions; align local/Docker Python
+- [ ] 0.3 Remove dead _load_lstm_model(), unused Radar import; move Template.ipynb to notebooks/legacy/
+
+## Phase 1 — Stop the UI lying
+- [ ] 1.1 Units: Wh vs kWh fixed in every label, axis and title (EDAPage, MetricsBar, MetricsPage, charts)
+- [ ] 1.2 LSTM: backend emits status "disabled"; frontend filters by status ok; BEST logic ignores non-ok, handles ties, shows N/A
+- [ ] 1.3 WeeklyPage charts repointed from LSTM to XGBoost
+- [ ] 1.4 Yearly trend: backend emits daily means; frontend drops the i%3 filter and downsample=24
+- [ ] 1.5 Split label computed from statistics, not hardcoded 80/20
+- [ ] 1.6 EDA timezone label IST; header subtitle says IIT Bombay residential buildings
+- [ ] 1.7 MetricsBar R² color thresholds; UploadPage negative R² shown red
+- [ ] 1.8 Layout: min-width:0 on grid children, print CSS, compact single MetricsBar
+- [ ] 1.9 PredictionsPage: no setState in render; real days 1–31 in the day picker
+- [ ] 1.10 Contrast pass; api.js same-origin base URL; useData with AbortController and visible errors
+
+## Phase 2 — Data pipeline (backend/data_pipeline.py)
+- [ ] 2.1 Load all 39 files, full date range; count read vs failed; no bare except
+- [ ] 2.2 Per-apartment hourly resample with sum(min_count=1); keep n_reporting
+- [ ] 2.3 Inspect the May-2018 :00-UTC file(s); document handling in DECISIONS.md
+- [ ] 2.4 Target = mean load per reporting apartment; build stable panel (>90% coverage)
+- [ ] 2.5 Gaps: interpolate only <=6h; longer gaps flagged and excluded from train and eval
+- [ ] 2.6 Outlier cap fitted on train only
+- [ ] 2.7 Flag suspect_inactive apartments (December mean <100 Wh/h)
+- [ ] 2.8 Write data_quality.json and a Data Quality page
+
+## Phase 3 — Evaluation (backend/evaluate.py)
+- [ ] 3.1 Baselines: persistence, seasonal naive 24h, same-hour-last-week, mean of last 4 same weekdays
+- [ ] 3.2 Metrics: RMSE, MAE, WAPE, MASE, bias, R²; guarded sMAPE
+- [ ] 3.3 Day-ahead protocol + 4+ fold expanding-window backtest (one fold May–Jun 2018, one fold Sep–Dec 2017)
+- [ ] 3.4 results.json per fold/model/metric; paired significance vs best baseline
+
+## Phase 4 — Models
+- [ ] 4.1 XGBoost day-ahead with lags >= 24h (or direct per-horizon); leakage pytest
+- [ ] 4.2 Calendar + holiday + semester flags + n_reporting features
+- [ ] 4.3 Weather features from Open-Meteo, cached to disk
+- [ ] 4.4 Optuna tuning on time-series CV inside train; early stopping on a train-side validation slice
+- [ ] 4.5 SARIMA/SARIMAX rolling day-ahead with weekly refit
+- [ ] 4.6 Quantile XGBoost P10/P50/P90 with coverage and pinball loss
+- [ ] 4.7 LSTM/GRU done properly, or omitted from the UI entirely
+
+## Phase 5 — Dashboard
+- [ ] 5.1 Model Metrics page: fold mean ± std table, "beats seasonal naive?" column
+- [ ] 5.2 Predictions page: P10–P90 band, fold day picker, error by hour and month, worst-days table
+- [ ] 5.3 Explain page: SHAP or gain importance, residual plots
+- [ ] 5.4 Limitations panel
+
+## Phase 6 — Upload & Validate redesign
+- [ ] 6.1 Column mapper, unit and timezone selectors, validation report
+- [ ] 6.2 Run the Phase 3 protocol on uploaded data (baselines, zero-shot, fit-on-60%)
+- [ ] 6.3 Streaming size check, .CSV accepted, progress/error states, results download
+
+## Phase 7 — Engineering
+- [ ] 7.1 pytest suite: metrics, split, leakage, gaps
+- [ ] 7.2 Makefile; Docker fixes (models/ copied, no-curl healthcheck, same-origin API)
+- [ ] 7.3 README, RESULTS.md, refreshed copilot-instructions.md
