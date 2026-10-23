@@ -71,6 +71,13 @@ export default function PredictionsPage() {
   const { data: predDaily }   = useData(api.predDaily, []);
   const { data: predHourly }  = useData(() => selectedMonth ? api.predHourly(selectedMonth, selectedDay) : Promise.resolve(null), [selectedMonth, selectedDay]);
   const { data: errData }     = useData(api.predMonthlyErrors);
+  const { data: stats }       = useData(api.statistics);
+
+  const splitLabel = stats
+    ? `${(stats.train_hours / (stats.train_hours + stats.test_hours) * 100).toFixed(1)}% / ` +
+      `${(stats.test_hours / (stats.train_hours + stats.test_hours) * 100).toFixed(1)}% ` +
+      `(${stats.train_hours.toLocaleString()} / ${stats.test_hours.toLocaleString()} h)`
+    : "loading…";
 
   // Derive available test months from monthly predictions
   const testMonths = predMonthly?.months || [];
@@ -113,7 +120,7 @@ export default function PredictionsPage() {
           ))}
           <div style={{ marginLeft: "auto", fontSize: 11, color: "#6b7280",
             fontFamily: "'IBM Plex Sans', sans-serif" }}>
-            Train / Test split: 80% / 20%
+            Train / Test split: {splitLabel}
           </div>
         </div>
       </div>

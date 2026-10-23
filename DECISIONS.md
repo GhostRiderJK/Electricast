@@ -12,3 +12,4 @@ One line per ambiguous choice; the more conservative option wins.
 - 1.2: BEST ties are marked on all tied models; if no active model has a finite metric, the value renders as N/A and no badge is shown.
 - 1.4: Daily means were derived from the raw CSVs with the existing 2017 cleaning pipeline and written into `model_results.json` as `eda.yearly_daily`; no model was retrained and all existing metrics/prediction arrays were verified byte-identical after the JSON update.
 - 1.4: `/api/eda/yearly` returns daily means by default and falls back to the legacy sampled `eda.yearly` series if an older results file is loaded.
+- 1.5: The split label shows percentages computed from `statistics.train_hours`/`test_hours` plus the raw hour counts, so the label is auditable; it renders "loading…" until statistics arrive rather than guessing.

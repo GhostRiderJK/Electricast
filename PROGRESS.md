@@ -45,3 +45,9 @@ One entry per iteration: date, item id, change, evidence, numbers.
 - `/api/eda/yearly` now returns `yearly_daily` with no downsample parameter; `train_models.py` emits the same structure for future runs; frontend fetches `/api/eda/yearly` and plots all 365 labels/values (removed `i % 3` and `downsample=24`).
 - Numbers: 365 points, first `2017-01-01 = 4909.8 Wh`, last `2017-12-31 = 664.5 Wh`; daily mean 7108.82 Wh equals hourly mean 7108.82 Wh.
 - Evidence: TestClient `/api/eda/yearly` → 200, 365 points, no `HH:MM` labels; `grep -rn "i % 3\|downsample"` → none; `npm run build` passed (44 modules, 1.63s); live browser showed `Yearly Load Trend` / `Daily mean electricity consumption trend (Wh)`.
+
+## 2026-10-23 — 1.5 Split label computed from statistics
+
+- PredictionsPage now fetches `/api/eda/statistics` and renders train/test percentages and hour counts from backend data; the hardcoded "80% / 20%" is gone.
+- Numbers: 4,344 train / 4,416 test hours → 49.6% / 50.4%.
+- Evidence: statistics endpoint returned train 4344, test 4416 (`49.6`, `50.4`); `npm run build` passed; production bundle served at :3100 and the live page rendered `Train / Test split: 49.6% / 50.4% (4,344 / 4,416 h)`.

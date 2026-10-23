@@ -11,7 +11,7 @@ Rules: one task per iteration. Tick [x] only after the VERIFY step passes.
 - [x] 1.2 LSTM: backend emits status "disabled"; frontend filters by status ok; BEST logic ignores non-ok, handles ties, shows N/A
 - [x] 1.3 WeeklyPage charts repointed from LSTM to XGBoost
 - [x] 1.4 Yearly trend: backend emits daily means; frontend drops the i%3 filter and downsample=24
-- [ ] 1.5 Split label computed from statistics, not hardcoded 80/20
+- [x] 1.5 Split label computed from statistics, not hardcoded 80/20
 - [ ] 1.6 EDA timezone label IST; header subtitle says IIT Bombay residential buildings
 - [ ] 1.7 MetricsBar R² color thresholds; UploadPage negative R² shown red
 - [ ] 1.8 Layout: min-width:0 on grid children, print CSS, compact single MetricsBar
