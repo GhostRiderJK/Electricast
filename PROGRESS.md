@@ -317,3 +317,21 @@ One entry per iteration: date, item id, change, evidence, numbers.
 
 - Summary vs full features: no annual calendar helped 4/5 scoring folds (mean 107.66 Wh, mean delta −6.43; Dec −31.28, other wins ≤0.53, Jul +0.21) and is kept. No weather helped 2/5 (mean 111.77, delta −2.32) and is discarded. ORACLE helped 3/5 (mean 112.80, delta −1.30) but is diagnostic only and can never be kept or become the winner. Winner: `no_annual_calendar` (`drop_annual_calendar: true`), which 9.4 will use as the comparison config.
 - Verification: `python -m pytest backend/tests -q` → **60 passed in 16.76 s** (four new tests: calendar columns drop while hour/dow/holiday/semester stay; weather columns drop; oracle feature is opt-in and reads the target hour; feature options reach fit metadata). The default feature path is unchanged, so `results.json` was not regenerated for this item.
+
+## 2026-10-23 — 9.4 Level-normalized target
+
+- Added `backend/level_features.py` (`trailing_scale`, `near_zero_fraction`) and opt-in `target_scale` / `near_zero_fraction` parameters in `forecast_model`. The scale is the mean un-filled target over the 168 h ending one hour before each day's origin, with at least 24 observed hours; it is multiplied back after prediction. The near-zero feature is the share of reporting stable apartments below 100 Wh at t−24.
+- Added `backend/scripts/level_experiment.py`, writing `backend/level_results.json`. It compares the 9.3 winner (raw target, no annual calendar when training <365 days) with normalized and normalized+near-zero variants on the same folds, untuned `DEFAULT_PARAMS`, and pairwise common hours.
+- MAE per fold (Wh), with delta vs the 9.3 winner on the same common hours:
+
+  | Fold | Eval h | Scale days | 9.3 winner | Normalized | Normalized + near-zero |
+  |---|---:|---:|---:|---:|---:|
+  | 2017-06 | 720 | 30/30 | 73.60 | 91.06 (+17.46) | 88.69 (+15.09) |
+  | 2017-07 | 744 | 31/31 | 63.69 | 67.11 (+3.42) | 66.28 (+2.59) |
+  | 2017-08 | 744 | 31/31 | 59.39 | 62.84 (+3.45) | 62.72 (+3.33) |
+  | 2017-09_11 | 1,695 | 85/91 | 145.25 | 153.68 (+7.90) | 154.80 (+9.02) |
+  | 2017-12 | 548 | 31/31 | 196.39 | 151.79 (−44.61) | 149.49 (−46.90) |
+  | 2018-05_06 (stress, excluded) | 182 | 11/35 | 108.87 | 157.50 (+48.64) | 156.62 (+47.75) |
+
+- Both normalized variants help only 1 of 5 scoring folds, so neither is adopted under the 9.3 rule. The normalized fold mean is lower (105.29 vs 107.66 Wh) and December bias falls from +161.35 to +37.37 Wh, but four folds regress; adding near-zero helps December by 2.30 Wh but does not change the 1/5 count. 9.5 therefore continues from the 9.3 winner. The scale is known at origin; days without a valid scale produce no forecast rather than a fallback.
+- Verification: `python -m pytest backend/tests -q` → **67 passed in 16.94 s** (seven new tests: trailing scale no-leak/constant/minimum observations, hand-checked near-zero fraction, target-scale arithmetic, scale multiplication and missing-scale NaN, lag-24 feature and no-leak, and forecast scale-coverage metadata). Default feature behavior and `results.json` are unchanged.

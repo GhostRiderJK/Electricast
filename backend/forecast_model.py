@@ -59,7 +59,7 @@ MAX_ESTIMATORS = 800
 
 
 def make_features(series, hours, reporting=None, weather=None,
-                  feature_options=None):
+                  feature_options=None, near_zero_fraction=None):
     """Build lag, calendar and weather features for the given target hours.
 
     `hours` must be tz-aware IST timestamps. Reporting counts and weather, when
@@ -69,6 +69,8 @@ def make_features(series, hours, reporting=None, weather=None,
     `feature_options` is an ablation switch used by scripts/feature_ablation.py.
     The oracle option adds target-hour temperature, which is not known at the
     forecast origin and must never be treated as a deployable result.
+    `near_zero_fraction` is an hourly series of stable-apartment vacancy share;
+    it enters as a 24 h lag for the Phase 9 level experiment.
     """
     options = {**FEATURE_DEFAULTS, **(feature_options or {})}
     hours = pd.DatetimeIndex(hours)
@@ -136,6 +138,10 @@ def make_features(series, hours, reporting=None, weather=None,
         block["oracle_temperature_same_hour"] = weather["temperature_2m"].reindex(
             hours
         ).to_numpy(dtype=float)
+    if near_zero_fraction is not None:
+        block["near_zero_fraction_lag_24"] = near_zero_fraction.reindex(
+            hours - pd.Timedelta(hours=24)
+        ).to_numpy(dtype=float)
     return pd.DataFrame(block, index=hours)
 
 
@@ -165,14 +171,40 @@ def _hour_range(start, end):
 
 
 def _training_frame(series, hours, reporting=None, weather=None,
-                    feature_options=None):
+                    feature_options=None, near_zero_fraction=None):
     features = make_features(
         series, hours, reporting=reporting, weather=weather,
         feature_options=feature_options,
+        near_zero_fraction=near_zero_fraction,
     )
     labels = series.reindex(hours).astype(float)
     keep = labels.notna() & features["lag_24"].notna()
     return features.loc[keep], labels.loc[keep]
+
+
+def _apply_target_scale(features, labels, target_scale):
+    """Divide labels by a known-at-origin scale and drop hours without one."""
+    scale = target_scale.reindex(labels.index).astype(float)
+    keep = scale.notna() & np.isfinite(scale) & (scale > 0)
+    if not keep.any():
+        return features.iloc[0:0], labels.iloc[0:0], scale.iloc[0:0]
+    return (
+        features.loc[keep],
+        labels.loc[keep] / scale.loc[keep],
+        scale.loc[keep],
+    )
+
+
+def _normalization_metadata(scales):
+    if scales is None or len(scales) == 0:
+        return None
+    return {
+        "method": "target divided by the trailing 7-day mean ending 1 h before each day's origin",
+        "n_train_scaled": int(len(scales)),
+        "scale_min_wh": round(float(scales.min()), 4),
+        "scale_max_wh": round(float(scales.max()), 4),
+        "scale_mean_wh": round(float(scales.mean()), 4),
+    }
 
 
 def _capped(labels):
@@ -238,7 +270,8 @@ def _sample_params(trial):
 
 
 def _prepare_cv(series, splits, reporting=None, weather=None,
-                feature_options=None):
+                feature_options=None, target_scale=None,
+                near_zero_fraction=None):
     prepared = []
     for split in splits:
         x_train, y_train = _training_frame(
@@ -247,7 +280,12 @@ def _prepare_cv(series, splits, reporting=None, weather=None,
             reporting=reporting,
             weather=weather,
             feature_options=feature_options,
+            near_zero_fraction=near_zero_fraction,
         )
+        if target_scale is not None:
+            x_train, y_train, _ = _apply_target_scale(
+                x_train, y_train, target_scale
+            )
         y_train, _, _ = _capped(y_train)
         x_val, y_val = _training_frame(
             series,
@@ -255,7 +293,10 @@ def _prepare_cv(series, splits, reporting=None, weather=None,
             reporting=reporting,
             weather=weather,
             feature_options=feature_options,
+            near_zero_fraction=near_zero_fraction,
         )
+        if target_scale is not None:
+            x_val, y_val, _ = _apply_target_scale(x_val, y_val, target_scale)
         if len(x_train) and len(x_val):
             prepared.append((x_train, y_train, x_val, y_val))
     return prepared
@@ -272,14 +313,16 @@ def _cv_mae(params, prepared):
 
 
 def tune(series, train_start, train_end, reporting=None, weather=None,
-         feature_options=None, n_trials=TUNE_TRIALS, seed=42):
+         feature_options=None, target_scale=None, near_zero_fraction=None,
+         n_trials=TUNE_TRIALS, seed=42):
     """Tune hyperparameters on expanding-window CV inside the training window."""
     splits = time_series_splits(train_start, train_end)
     if not splits:
         raise ValueError("training window is too short for time-series CV")
     prepared = _prepare_cv(
         series, splits, reporting=reporting, weather=weather,
-        feature_options=feature_options,
+        feature_options=feature_options, target_scale=target_scale,
+        near_zero_fraction=near_zero_fraction,
     )
     if not prepared:
         raise ValueError("no usable CV split inside the training window")
@@ -294,10 +337,12 @@ def tune(series, train_start, train_end, reporting=None, weather=None,
 
 
 def _fit_tuned(series, train_start, train_end, reporting=None, weather=None,
-               feature_options=None, n_trials=TUNE_TRIALS):
+               feature_options=None, target_scale=None,
+               near_zero_fraction=None, n_trials=TUNE_TRIALS):
     best, cv_mae, splits = tune(
         series, train_start, train_end, reporting=reporting, weather=weather,
-        feature_options=feature_options, n_trials=n_trials,
+        feature_options=feature_options, target_scale=target_scale,
+        near_zero_fraction=near_zero_fraction, n_trials=n_trials,
     )
     params = dict(best)
     params.update({
@@ -311,7 +356,8 @@ def _fit_tuned(series, train_start, train_end, reporting=None, weather=None,
 
     prepared = _prepare_cv(
         series, splits, reporting=reporting, weather=weather,
-        feature_options=feature_options,
+        feature_options=feature_options, target_scale=target_scale,
+        near_zero_fraction=near_zero_fraction,
     )
     best_iterations = []
     for x_train, y_train, x_val, y_val in prepared:
@@ -325,7 +371,11 @@ def _fit_tuned(series, train_start, train_end, reporting=None, weather=None,
         series, _hour_range(train_start, train_end),
         reporting=reporting, weather=weather,
         feature_options=feature_options,
+        near_zero_fraction=near_zero_fraction,
     )
+    scales = None
+    if target_scale is not None:
+        x_all, y_all, scales = _apply_target_scale(x_all, y_all, target_scale)
     y_all, cap, n_capped = _capped(y_all)
     final_params = {
         key: value for key, value in params.items()
@@ -346,6 +396,8 @@ def _fit_tuned(series, train_start, train_end, reporting=None, weather=None,
         },
         "features": list(x_all.columns),
         "feature_options": {**FEATURE_DEFAULTS, **(feature_options or {})},
+        "normalization": _normalization_metadata(scales),
+        "near_zero_fraction_feature": near_zero_fraction is not None,
         "importance": _gain_importance(model, x_all.columns),
         "tuning": {
             "n_trials": int(n_trials),
@@ -363,25 +415,34 @@ def _fit_tuned(series, train_start, train_end, reporting=None, weather=None,
 
 def fit(series, train_start, train_end, params=None, reporting=None,
         weather=None, tune_model=False, n_trials=TUNE_TRIALS,
-        feature_options=None):
+        feature_options=None, target_scale=None, near_zero_fraction=None):
     """Fit one pooled model on the training window.
 
     With `tune_model`, Optuna selects hyperparameters on expanding-window CV
     inside the training window, then early stopping picks the iteration count
     on a train-side validation slice. Without it, `params`/defaults are used.
+    With `target_scale`, labels are divided by a known-at-origin level and
+    predictions are multiplied back in `predict`.
     """
     if tune_model:
         return _fit_tuned(
             series, train_start, train_end, reporting=reporting,
             weather=weather, feature_options=feature_options,
-            n_trials=n_trials,
+            target_scale=target_scale,
+            near_zero_fraction=near_zero_fraction, n_trials=n_trials,
         )
 
     hours = _hour_range(train_start, train_end)
     features, labels = _training_frame(
         series, hours, reporting=reporting, weather=weather,
         feature_options=feature_options,
+        near_zero_fraction=near_zero_fraction,
     )
+    scales = None
+    if target_scale is not None:
+        features, labels, scales = _apply_target_scale(
+            features, labels, target_scale
+        )
     labels, cap, n_capped = _capped(labels)
 
     effective = dict(DEFAULT_PARAMS)
@@ -399,33 +460,52 @@ def fit(series, train_start, train_end, params=None, reporting=None,
         "params": {k: v for k, v in effective.items() if k != "n_jobs"},
         "features": list(features.columns),
         "feature_options": {**FEATURE_DEFAULTS, **(feature_options or {})},
+        "normalization": _normalization_metadata(scales),
+        "near_zero_fraction_feature": near_zero_fraction is not None,
         "importance": _gain_importance(model, features.columns),
     }
     return model, metadata
 
 
 def predict(series, model, start, end, reporting=None, weather=None,
-            feature_options=None):
-    """Predict every hour in [start, end]; negative loads are clipped to zero."""
+            feature_options=None, target_scale=None,
+            near_zero_fraction=None):
+    """Predict every hour in [start, end]; negative loads are clipped to zero.
+
+    With `target_scale`, normalized predictions are multiplied by each day's
+    known-at-origin level; hours without a valid scale stay NaN.
+    """
     hours = _hour_range(start, end)
     features = make_features(
         series, hours, reporting=reporting, weather=weather,
         feature_options=feature_options,
+        near_zero_fraction=near_zero_fraction,
     )
-    values = model.predict(features).astype(float)
-    return pd.Series(np.maximum(values, 0.0), index=hours, name="xgboost")
+    values = np.maximum(model.predict(features).astype(float), 0.0)
+    if target_scale is not None:
+        scale = target_scale.reindex(hours).to_numpy(dtype=float)
+        valid = np.isfinite(scale) & (scale > 0)
+        values = np.where(valid, values * scale, np.nan)
+    return pd.Series(values, index=hours, name="xgboost")
 
 
 def forecast(series, train_start, train_end, test_start, test_end, params=None,
              reporting=None, weather=None, tune_model=False,
-             n_trials=TUNE_TRIALS, feature_options=None):
+             n_trials=TUNE_TRIALS, feature_options=None, target_scale=None,
+             near_zero_fraction=None):
     """Fit on the training window and forecast the test window."""
     model, metadata = fit(
         series, train_start, train_end, params=params, reporting=reporting,
         weather=weather, tune_model=tune_model, n_trials=n_trials,
-        feature_options=feature_options,
+        feature_options=feature_options, target_scale=target_scale,
+        near_zero_fraction=near_zero_fraction,
     )
-    return predict(
+    prediction = predict(
         series, model, test_start, test_end, reporting=reporting, weather=weather,
-        feature_options=feature_options,
-    ), metadata
+        feature_options=feature_options, target_scale=target_scale,
+        near_zero_fraction=near_zero_fraction,
+    )
+    if target_scale is not None and metadata.get("normalization"):
+        metadata["normalization"]["predicted_hours"] = int(prediction.notna().sum())
+        metadata["normalization"]["missing_scale_hours"] = int(prediction.isna().sum())
+    return prediction, metadata
