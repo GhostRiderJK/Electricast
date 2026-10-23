@@ -130,6 +130,12 @@ One entry per iteration: date, item id, change, evidence, numbers.
 - Added `backend/evaluate.py` with day-ahead baselines: persistence (last valid value before 00:00 IST, held flat), seasonal naive 24 h, same-hour-last-week (168 h), and mean of the same hour on the previous four same weekdays (all four required).
 - Evidence: synthetic ramp shows persistence errors 1→24 across a day, seasonal-naive error 24, weekly error 168, four-week mean error 420; constant series yields zero errors; a missing previous day makes seasonal naive NaN while persistence falls back to the last valid value; a missing same weekday makes the four-week mean NaN. On July 2017 (744 h), MAE: persistence 119.56, seasonal naive 75.01, last-week 95.00, four-week mean 86.94 Wh.
 
+## 2026-10-23 — 3.2 Metrics
+
+- Added `compute_metrics()` (RMSE, MAE, WAPE, MASE, bias, R², guarded sMAPE) and `mase_scale()`, which uses the mean absolute 24-h seasonal difference over valid training pairs. Pairs are aligned on timestamps and dropped when actual or prediction is missing.
+- Evidence: hand-checked example [10,20,30] vs [12,18,33] gives MAE 2.3333, RMSE 2.3805, WAPE 11.6667%, sMAPE 12.744%, bias 1.0, R² 0.915, MASE 0.4667 (scale 5); perfect forecasts give zeros and R²=1; all-zero actuals give sMAPE 0 with WAPE/R²/MASE null; NaNs reduce n correctly; a ramp has MASE scale 24. July 2017 baseline table: seasonal naive MAE 75.01, MASE 0.777, R² 0.2375 vs persistence MAE 119.56, R² -0.7352.
+
+
 
 
 

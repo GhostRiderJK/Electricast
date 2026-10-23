@@ -43,6 +43,66 @@ def _lag_values(series, hours, lag):
     return series.reindex(hours - pd.Timedelta(hours=lag)).to_numpy(dtype=float)
 
 
+def mase_scale(train_series):
+    """Mean absolute 24-h seasonal difference over valid training pairs."""
+    diffs = (train_series - train_series.shift(24)).abs().dropna()
+    return float(diffs.mean()) if len(diffs) else None
+
+
+def _clean(value, digits=6):
+    if value is None or not np.isfinite(value):
+        return None
+    return round(float(value), digits)
+
+
+def compute_metrics(actual, pred, scale=None):
+    """Metrics over the timestamps where both actual and prediction exist.
+
+    sMAPE is guarded at a zero denominator (the pair contributes 0); WAPE,
+    MASE and R² are None when their denominators are zero or missing.
+    """
+    frame = pd.concat(
+        [pd.Series(actual).rename("actual"), pd.Series(pred).rename("pred")],
+        axis=1,
+    ).dropna()
+    if frame.empty:
+        return {
+            "status": "no_data", "n": 0, "MAE": None, "RMSE": None,
+            "WAPE": None, "MASE": None, "bias": None, "R2": None, "sMAPE": None,
+        }
+
+    a = frame["actual"].to_numpy(dtype=float)
+    p = frame["pred"].to_numpy(dtype=float)
+    err = p - a
+    abs_err = np.abs(err)
+
+    mae = float(abs_err.mean())
+    rmse = float(np.sqrt(np.mean(err ** 2)))
+    abs_actual_sum = float(np.abs(a).sum())
+    wape = float(abs_err.sum() / abs_actual_sum * 100) if abs_actual_sum > 0 else None
+
+    denom = np.abs(a) + np.abs(p)
+    smape_terms = np.divide(2 * abs_err, denom, out=np.zeros_like(abs_err),
+                            where=denom > 0)
+    smape = float(smape_terms.mean() * 100)
+
+    sst = float(((a - a.mean()) ** 2).sum())
+    r2 = float(1 - (err ** 2).sum() / sst) if sst > 0 else None
+    mase = float(mae / scale) if scale is not None and scale > 0 else None
+
+    return {
+        "status": "ok",
+        "n": int(len(a)),
+        "MAE": _clean(mae, 4),
+        "RMSE": _clean(rmse, 4),
+        "WAPE": _clean(wape, 4),
+        "MASE": _clean(mase, 4),
+        "bias": _clean(float(err.mean()), 4),
+        "R2": _clean(r2, 6),
+        "sMAPE": _clean(smape, 4),
+    }
+
+
 def baseline_forecasts(series, start, end):
     """Forecast every hour in [start, end] with each baseline.
 
@@ -74,17 +134,26 @@ def baseline_forecasts(series, start, end):
     return preds
 
 
+def _show(value, digits=2):
+    return "N/A" if value is None else f"{value:.{digits}f}"
+
+
 def main():
     series = load_target()
     start, end = "2017-07-01", "2017-07-31 23:00"
     preds = baseline_forecasts(series, start, end)
     actual = series.reindex(test_hours(start, end))
-    print(f"Baselines {start} -> {end}, target mean {actual.mean():.2f} Wh")
+    train = series.loc[:"2017-06-30 23:00"]
+    scale = mase_scale(train)
+    print(f"Baselines {start} -> {end}, target mean {actual.mean():.2f} Wh; "
+          f"MASE scale {_show(scale)} Wh")
+    print(f"{'model':28s} {'n':>5s} {'MAE':>8s} {'RMSE':>8s} {'WAPE%':>8s} "
+          f"{'MASE':>7s} {'bias':>8s} {'R2':>8s} {'sMAPE%':>8s}")
     for name in BASELINES:
-        pred = preds[name]
-        ok = actual.notna() & pred.notna()
-        mae = float((pred[ok] - actual[ok]).abs().mean()) if ok.any() else float("nan")
-        print(f"  {name:28s} n={int(ok.sum()):5d} MAE={mae:8.2f}")
+        m = compute_metrics(actual, preds[name], scale)
+        print(f"{name:28s} {m['n']:5d} {_show(m['MAE']):>8s} {_show(m['RMSE']):>8s} "
+              f"{_show(m['WAPE']):>8s} {_show(m['MASE'], 3):>7s} {_show(m['bias']):>8s} "
+              f"{_show(m['R2'], 4):>8s} {_show(m['sMAPE']):>8s}")
 
 
 if __name__ == "__main__":
